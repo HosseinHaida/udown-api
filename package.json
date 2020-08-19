@@ -1,0 +1,21 @@
+{
+  "name": "udown-api",
+  "version": "1.0.0",
+  "description": "UDown or what?",
+  "main": "index.js",
+  "scripts": {
+    "test": "run tests"
+  },
+  "keywords": [
+    "basketball",
+    "gatherings"
+  ],
+  "author": "Hossein Heidari",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^8.2.0",
+    "express": "^4.17.1",
+    "knex": "^0.21.5",
+    "pg": "^8.3.0"
+  }
+}
