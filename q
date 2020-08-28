@@ -1,0 +1,5 @@
+ id | username |                        password_hash                         | first_name | last_name | gender |             photo              |            bio            | height |    sports    |                               photos                                | friends |                    scopes                    | verified |        created_at         | updated_at | updated_by 
+----+----------+--------------------------------------------------------------+------------+-----------+--------+--------------------------------+---------------------------+--------+--------------+---------------------------------------------------------------------+---------+----------------------------------------------+----------+---------------------------+------------+------------
+  1 | hossein  | $2a$10$DS.5tCCdESDCgLQp89OkHOoHw89i2qidMDytFpnnIRPQiSj8f6/N. | Hossein    | Heidari   | male   | ../uploads/users/1122_user.JPG | A passionate freestylist. |    180 | {Basketball} | {../uploads/users/1122_user_pic_1,../uploads/users/1122_user_pic_2} | {}      | {edit_sbs_scopes,edit_locations,edit_events} | t        | 2020-05-19 10:00:40+04:30 |            |           
+(1 row)
+
