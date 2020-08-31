@@ -9,6 +9,8 @@ const {
 } = require('../helpers/validations')
 
 const { errorMessage, successMessage, status } = require('../helpers/status')
+const { upload } = require('./usersPhotoUpload')
+const multer = require('multer')
 
 /**
  * Signup
@@ -262,27 +264,37 @@ const fetchUsersList = async (req, res) => {
  * @returns {object} updated user
  */
 const setPhoto = async (req, res) => {
-  const photoName = req.uploaded_photo_name
-  if (!photoName) {
-    errorMessage.error = 'Faced issues saving photo'
-    return res.status(status.error).send(errorMessage)
-  }
-  const { username } = req.user
-  try {
-    const path =
-      process.env.SERVER_URL +
-      ':' +
-      process.env.PORT +
-      '/' +
-      process.env.UPLOAD_DIR_USER +
-      photoName
-    await db('users').where({ username: username }).update({ photo: path })
-    successMessage.photoPath = path
-    return res.status(status.success).send(successMessage)
-  } catch (error) {
-    errorMessage.error = 'Operation was not successful'
-    return res.status(status.error).send(errorMessage)
-  }
+  upload(req, res, async (err) => {
+    if (err instanceof multer.MulterError) {
+      errorMessage.error = 'Upload operation was not successful'
+      return res.status(status.error).send(errorMessage)
+    } else if (err) {
+      errorMessage.error = 'An unknown error occurred when uploading'
+      return res.status(status.error).send(errorMessage)
+    }
+    // Everything went fine with multer and uploading
+    const photoName = req.uploaded_photo_name
+    if (!photoName) {
+      errorMessage.error = 'Faced issues saving photo'
+      return res.status(status.error).send(errorMessage)
+    }
+    const { username } = req.user
+    try {
+      const path =
+        process.env.SERVER_URL +
+        ':' +
+        process.env.PORT +
+        '/' +
+        process.env.UPLOAD_DIR_USER +
+        photoName
+      await db('users').where({ username: username }).update({ photo: path })
+      successMessage.photo_path = path
+      return res.status(status.success).send(successMessage)
+    } catch (error) {
+      errorMessage.error = 'Operation was not successful'
+      return res.status(status.error).send(errorMessage)
+    }
+  })
 }
 
 /**
