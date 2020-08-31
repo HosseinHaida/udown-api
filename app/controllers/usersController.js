@@ -1,7 +1,7 @@
 const db = require('../db').Instance()
 const moment = require('moment')
 const {
-  hashPassword,
+  hashString,
   validatePassword,
   isEmpty,
   generateUserToken,
@@ -44,7 +44,7 @@ const signupUser = async (req, res) => {
     errorMessage.error = 'Short password'
     return res.status(status.bad).send(errorMessage)
   }
-  const password_hash = hashPassword(password)
+  const password_hash = hashString(password)
   const userPayload = {
     username,
     first_name,
@@ -68,7 +68,8 @@ const signupUser = async (req, res) => {
         'first_name',
         'last_name',
         'gender',
-        'height'
+        'height',
+        'bio'
       )
       .from({ u: 'users' })
       .where('u.username', userPayload.username)
@@ -122,7 +123,8 @@ const siginUser = async (req, res) => {
         'first_name',
         'last_name',
         'gender',
-        'height'
+        'height',
+        'bio'
       )
       .from({ u: 'users' })
       .where('u.username', username)
@@ -151,6 +153,131 @@ const siginUser = async (req, res) => {
     // Create user obj with token && send to client
     successMessage.user = thisUser
     successMessage.user.token = token
+    return res.status(status.success).send(successMessage)
+  } catch (error) {
+    errorMessage.error = 'Operation was not successful'
+    return res.status(status.error).send(errorMessage)
+  }
+}
+
+/**
+ * Fetch User
+ * @param {object} req
+ * @param {object} res
+ * @returns {object} user object
+ */
+const fetchUser = async (req, res) => {
+  const { username } = req.user
+  try {
+    // Find user in DB
+    const thisUser = await db
+      .select(
+        'id',
+        'username',
+        'scopes',
+        'first_name',
+        'last_name',
+        'gender',
+        'height',
+        'bio',
+        'photo',
+        'sports',
+        'photos',
+        'friends',
+        'verified',
+        'city'
+      )
+      .from({ u: 'users' })
+      .where('u.username', username)
+      .first()
+    // Check if no one was found
+    if (!thisUser) {
+      errorMessage.error = "Couldn't find user"
+      return res.status(status.notfound).send(errorMessage)
+    }
+    // Create user obj with token && send to client
+    successMessage.user = thisUser
+    return res.status(status.success).send(successMessage)
+  } catch (error) {
+    errorMessage.error = 'Operation was not successful'
+    return res.status(status.error).send(errorMessage)
+  }
+}
+
+/**
+ * Fetch users list
+ * @param {object} req
+ * @param {object} res
+ * @returns {object} user object
+ */
+const fetchUsersList = async (req, res) => {
+  const { howMany, page } = req.params
+  try {
+    // get total users count
+    const total = await db('users').count('*').first()
+    const totalCount = total.count
+    const totalPages = Math.floor(total.count / howMany + 1)
+    // fetch users in DB
+    const users = await db
+      .select(
+        'id',
+        'username',
+        'scopes',
+        'first_name',
+        'last_name',
+        'gender',
+        'height',
+        'bio',
+        'photo',
+        'sports',
+        'photos',
+        'friends',
+        'verified',
+        'city',
+        'created_at'
+      )
+      .from({ u: 'users' })
+      .offset((page - 1) * howMany)
+      .limit(howMany)
+    // Check if no one was found
+    if (!users) {
+      errorMessage.error = "Couldn't find any users"
+      return res.status(status.notfound).send(errorMessage)
+    }
+    // Create user obj with token && send to client
+    successMessage.users = users
+    successMessage.total = totalCount
+    successMessage.pages = totalPages
+    return res.status(status.success).send(successMessage)
+  } catch (error) {
+    errorMessage.error = 'Operation was not successful'
+    return res.status(status.error).send(errorMessage)
+  }
+}
+
+/**
+ * Set photo for user
+ * @param {object} req
+ * @param {object} res
+ * @returns {object} updated user
+ */
+const setPhoto = async (req, res) => {
+  const photoName = req.uploaded_photo_name
+  if (!photoName) {
+    errorMessage.error = 'Faced issues saving photo'
+    return res.status(status.error).send(errorMessage)
+  }
+  const { username } = req.user
+  try {
+    const path =
+      process.env.SERVER_URL +
+      ':' +
+      process.env.PORT +
+      '/' +
+      process.env.UPLOAD_DIR_USER +
+      photoName
+    await db('users').where({ username: username }).update({ photo: path })
+    successMessage.photoPath = path
     return res.status(status.success).send(successMessage)
   } catch (error) {
     errorMessage.error = 'Operation was not successful'
@@ -200,4 +327,11 @@ const updateUserScopes = async (req, res) => {
   }
 }
 
-module.exports = { signupUser, siginUser, updateUserScopes }
+module.exports = {
+  signupUser,
+  siginUser,
+  fetchUser,
+  setPhoto,
+  fetchUsersList,
+  updateUserScopes,
+}

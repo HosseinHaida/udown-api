@@ -8,7 +8,7 @@ const jwt = require('jsonwebtoken')
  */
 const saltRounds = 10
 const salt = bcrypt.genSaltSync(saltRounds)
-const hashPassword = (password) => bcrypt.hashSync(password, salt)
+const hashString = (password) => bcrypt.hashSync(password, salt)
 
 /**
  * comparePassword
@@ -100,7 +100,7 @@ module.exports = {
   validatePassword,
   isEmpty,
   empty,
-  hashPassword,
+  hashString,
   comparePassword,
   generateUserToken,
 }

@@ -18,8 +18,8 @@ const boolMap = {
 const config = {
   env: env,
   uploadDir: {
-    user: process.env.UPLOAD_DIR_USER,
-    location: process.env.LOCATION,
+    user: process.env.UPLOAD_DIR + process.env.UPLOAD_DIR_USER,
+    location: process.env.UPLOAD_DIR + process.env.UPLOAD_DIR_LOCATIONS,
   },
   session: {
     passsword: process.env.SESSION_PASSWORD,

@@ -7,6 +7,7 @@ module.exports.up = async function (knex) {
     table.text('last_name').notNullable()
     table.text('gender').notNullable()
     table.text('photo')
+    table.text('city')
     table.text('bio')
     table.integer('height').notNullable()
     table.specificType('sports', 'text ARRAY').notNullable()
