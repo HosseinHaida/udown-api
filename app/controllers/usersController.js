@@ -11,6 +11,7 @@ const {
 const { errorMessage, successMessage, status } = require('../helpers/status')
 const { upload } = require('./usersPhotoUpload')
 const multer = require('multer')
+const { search } = require('../routes/usersRoute')
 
 /**
  * Signup
@@ -213,14 +214,12 @@ const fetchUser = async (req, res) => {
  * @returns {object} user object
  */
 const fetchUsersList = async (req, res) => {
-  const { howMany, page } = req.params
+  const { how_many, page, search_text } = req.params
   try {
-    // get total users count
-    const total = await db('users').count('*').first()
-    const totalCount = total.count
-    const totalPages = Math.floor(total.count / howMany + 1)
-    // fetch users in DB
-    const users = await db
+    // Create query for total number of users
+    const totalUsersQuery = db('users').count('*').first()
+    // Create query to fetch users
+    const query = db
       .select(
         'id',
         'username',
@@ -238,15 +237,35 @@ const fetchUsersList = async (req, res) => {
         'city',
         'created_at'
       )
-      .from({ u: 'users' })
-      .offset((page - 1) * howMany)
-      .limit(howMany)
+      .from('users')
+      .offset((page - 1) * how_many)
+      .limit(how_many)
+
+    if (!isEmpty(search_text)) {
+      const whereValue = `%${search_text.toLowerCase()}%`
+      const whereKeyFor = (column) => `LOWER(${column}) LIKE ?`
+      // Change query to fetch users based on search_text
+      query
+        .whereRaw(whereKeyFor('username'), whereValue)
+        .orWhereRaw(whereKeyFor('first_name'), whereValue)
+        .orWhereRaw(whereKeyFor('last_name'), whereValue)
+      // Change query for total number of users based on search_text
+      totalUsersQuery
+        .whereRaw(whereKeyFor('username'), whereValue)
+        .orWhereRaw(whereKeyFor('first_name'), whereValue)
+        .orWhereRaw(whereKeyFor('last_name'), whereValue)
+    }
+    // Calculate number of users and pages
+    const total = await totalUsersQuery
+    const totalCount = total.count
+    const totalPages = Math.ceil(total.count / how_many)
+    // Actually query the DB for users
+    const users = await query
     // Check if no one was found
-    if (!users) {
+    if (isEmpty(users)) {
       errorMessage.error = "Couldn't find any users"
       return res.status(status.notfound).send(errorMessage)
     }
-    // Create user obj with token && send to client
     successMessage.users = users
     successMessage.total = totalCount
     successMessage.pages = totalPages
