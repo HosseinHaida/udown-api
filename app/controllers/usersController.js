@@ -93,7 +93,7 @@ const signupUser = async (req, res) => {
     return res.status(status.created).send(successMessage)
   } catch (error) {
     if (error.routine === '_bt_check_unique') {
-      errorMessage.error = 'User with that username already exists!'
+      errorMessage.error = 'Username already exists'
       return res.status(status.conflict).send(errorMessage)
     }
   }
@@ -108,7 +108,7 @@ const signupUser = async (req, res) => {
 const siginUser = async (req, res) => {
   const { username, password } = req.body
   if (isEmpty(username) || isEmpty(password)) {
-    errorMessage.error = 'Username or Password detail is missing'
+    errorMessage.error = 'Username or Password is missing'
     return res.status(status.bad).send(errorMessage)
   }
   if (!validatePassword(password)) {
@@ -134,12 +134,12 @@ const siginUser = async (req, res) => {
       .first()
     // Check if no one was found
     if (!thisUser) {
-      errorMessage.error = 'User with this username does not exist'
+      errorMessage.error = 'Username does not exist'
       return res.status(status.notfound).send(errorMessage)
     }
     // Check if the right password
     if (!comparePassword(thisUser.password_hash, password)) {
-      errorMessage.error = 'The password you provided is incorrect'
+      errorMessage.error = 'Password is incorrect'
       return res.status(status.bad).send(errorMessage)
     }
     // Generate token for user
@@ -195,7 +195,7 @@ const fetchUser = async (req, res) => {
       .first()
     // Check if no one was found
     if (!thisUser) {
-      errorMessage.error = "Couldn't find user"
+      errorMessage.error = 'User could not be found'
       return res.status(status.notfound).send(errorMessage)
     }
     // Create user obj with token && send to client
@@ -263,7 +263,7 @@ const fetchUsersList = async (req, res) => {
     const users = await query
     // Check if no one was found
     if (isEmpty(users)) {
-      errorMessage.error = "Couldn't find any users"
+      errorMessage.error = 'Could not find any user'
       return res.status(status.notfound).send(errorMessage)
     }
     successMessage.users = users
@@ -285,10 +285,10 @@ const fetchUsersList = async (req, res) => {
 const setPhoto = async (req, res) => {
   upload(req, res, async (err) => {
     if (err instanceof multer.MulterError) {
-      errorMessage.error = 'Upload operation was not successful'
+      errorMessage.error = 'Upload was not successful'
       return res.status(status.error).send(errorMessage)
     } else if (err) {
-      errorMessage.error = 'An unknown error occurred when uploading'
+      errorMessage.error = 'An error occurred when uploading'
       return res.status(status.error).send(errorMessage)
     }
     // Everything went fine with multer and uploading
@@ -343,7 +343,7 @@ const updateUserScopes = async (req, res) => {
     const { rows } = await dbQuery.query(findUserQuery, [id])
     const dbResponse = rows[0]
     if (!dbResponse) {
-      errorMessage.error = 'User Cannot be found'
+      errorMessage.error = 'User could not be found'
       return res.status(status.notfound).send(errorMessage)
     }
     const values = [scopesToBeGiven, id]
