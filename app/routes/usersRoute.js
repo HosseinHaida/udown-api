@@ -3,11 +3,11 @@ const express = require('express')
 const {
   signupUser,
   siginUser,
-  //   searchFirstnameOrLastname,
   setPhoto,
   fetchUsersList,
   updateUserScopes,
   fetchUser,
+  updateUser,
 } = require('../controllers/usersController.js')
 
 const verifyAuth = require('../middlewares/verifyAuth.js')
@@ -23,6 +23,6 @@ router.get('/users/list/:page/:how_many/:search_text', fetchUsersList)
 router.get('/users/list/:page/:how_many', fetchUsersList)
 router.post('/auth/set_photo', verifyAuth, setPhoto)
 router.put('/user/:id', verifyAuth, updateUserScopes)
-// router.get('/users/first_name', searchFirstnameOrLastname);
+router.post('/auth/update', verifyAuth, updateUser)
 
 module.exports = router

@@ -40,12 +40,10 @@ const signupUser = async (req, res) => {
     isEmpty(height) ||
     isEmpty(sports)
   ) {
-    errorMessage.error = 'Empty fields'
-    return res.status(status.bad).send(errorMessage)
+    catchError('Empty fields', 'bad', res)
   }
   if (!validatePassword(password)) {
-    errorMessage.error = 'Short password'
-    return res.status(status.bad).send(errorMessage)
+    catchError('Short password', 'bad', res)
   }
   const password_hash = hashString(password)
   const userPayload = {
@@ -56,9 +54,9 @@ const signupUser = async (req, res) => {
     gender,
     height,
     sports,
+    friends: [],
     created_at,
   }
-
   try {
     // Insert user to DB
     const r = await db('users').insert(userPayload)
@@ -71,8 +69,7 @@ const signupUser = async (req, res) => {
         'first_name',
         'last_name',
         'gender',
-        'height',
-        'bio'
+        'height'
       )
       .from({ u: 'users' })
       .where('u.username', userPayload.username)
@@ -93,8 +90,9 @@ const signupUser = async (req, res) => {
     return res.status(status.created).send(successMessage)
   } catch (error) {
     if (error.routine === '_bt_check_unique') {
-      errorMessage.error = 'Username already exists'
-      return res.status(status.conflict).send(errorMessage)
+      catchError('Username already exists', 'conflict', res)
+    } else {
+      catchError('Operation was not successfull', 'error', res)
     }
   }
 }
@@ -108,58 +106,44 @@ const signupUser = async (req, res) => {
 const siginUser = async (req, res) => {
   const { username, password } = req.body
   if (isEmpty(username) || isEmpty(password)) {
-    errorMessage.error = 'Username or Password is missing'
-    return res.status(status.bad).send(errorMessage)
+    catchError('Username or password is missing', 'bad', res)
   }
   if (!validatePassword(password)) {
-    errorMessage.error = 'Please enter a valid Password'
-    return res.status(status.bad).send(errorMessage)
+    catchError('Please enter a valid password', 'bad', res)
   }
   try {
-    // Find user in DB
-    const thisUser = await db
-      .select(
-        'username',
-        'password_hash',
-        'id',
-        'scopes',
-        'first_name',
-        'last_name',
-        'gender',
-        'height',
-        'bio'
-      )
-      .from({ u: 'users' })
-      .where('u.username', username)
+    const userWithThisUsernameInDb = await db('users')
+      .count('*')
+      .where('username', username)
       .first()
-    // Check if no one was found
-    if (!thisUser) {
-      errorMessage.error = 'Username does not exist'
-      return res.status(status.notfound).send(errorMessage)
+    if (Number(userWithThisUsernameInDb.count) === 1) {
+      // Find user in DB
+      const thisUser = await fetchThisUser(username, 'username')
+      // Check if the right password
+      if (!comparePassword(thisUser.password_hash, password)) {
+        catchError('Password is incorrect', 'bad', res)
+      }
+      // Generate token for user
+      const token = generateUserToken(
+        thisUser.username,
+        thisUser.id,
+        thisUser.scopes,
+        thisUser.first_name,
+        thisUser.last_name,
+        thisUser.gender,
+        thisUser.height
+      )
+      delete thisUser.password_hash
+      // Create user obj with token && send to client
+      successMessage.user = thisUser
+      successMessage.user.token = token
+      return res.status(status.success).send(successMessage)
+    } else {
+      catchError('Username does not exist', 'error', res)
     }
-    // Check if the right password
-    if (!comparePassword(thisUser.password_hash, password)) {
-      errorMessage.error = 'Password is incorrect'
-      return res.status(status.bad).send(errorMessage)
-    }
-    // Generate token for user
-    const token = generateUserToken(
-      thisUser.username,
-      thisUser.id,
-      thisUser.scopes,
-      thisUser.first_name,
-      thisUser.last_name,
-      thisUser.gender,
-      thisUser.height
-    )
-    delete thisUser.password_hash
-    // Create user obj with token && send to client
-    successMessage.user = thisUser
-    successMessage.user.token = token
-    return res.status(status.success).send(successMessage)
   } catch (error) {
-    errorMessage.error = 'Operation was not successful'
-    return res.status(status.error).send(errorMessage)
+    console.log(error)
+    catchError('Could not find user', 'error', res)
   }
 }
 
@@ -170,45 +154,25 @@ const siginUser = async (req, res) => {
  * @returns {object} user object
  */
 const fetchUser = async (req, res) => {
-  const { username } = req.user
+  const { username, user_id } = req.user
   try {
     // Find user in DB
-    const thisUser = await db
-      .select(
-        'id',
-        'username',
-        'scopes',
-        'first_name',
-        'last_name',
-        'gender',
-        'height',
-        'bio',
-        'photo',
-        'sports',
-        'photos',
-        'friends',
-        'verified',
-        'city'
-      )
-      .from({ u: 'users' })
-      .where('u.username', username)
-      .first()
+    const thisUser = await fetchThisUser(user_id, 'id')
     // Check if no one was found
     if (!thisUser) {
-      errorMessage.error = 'User could not be found'
-      return res.status(status.notfound).send(errorMessage)
+      catchError('User could not be found', 'notFound', res)
     }
+    delete thisUser.password_hash
     // Create user obj with token && send to client
     successMessage.user = thisUser
     return res.status(status.success).send(successMessage)
   } catch (error) {
-    errorMessage.error = 'Operation was not successful'
-    return res.status(status.error).send(errorMessage)
+    catchError('Operation was not successful', 'error', res)
   }
 }
 
 /**
- * Fetch users list
+ * Fetch users list (search also practical)
  * @param {object} req
  * @param {object} res
  * @returns {object} user object
@@ -263,16 +227,14 @@ const fetchUsersList = async (req, res) => {
     const users = await query
     // Check if no one was found
     if (isEmpty(users)) {
-      errorMessage.error = 'Could not find any user'
-      return res.status(status.notfound).send(errorMessage)
+      catchError('Could not find any user', 'notFound', res)
     }
     successMessage.users = users
     successMessage.total = totalCount
     successMessage.pages = totalPages
     return res.status(status.success).send(successMessage)
   } catch (error) {
-    errorMessage.error = 'Operation was not successful'
-    return res.status(status.error).send(errorMessage)
+    catchError('Operation was not successful', 'error', res)
   }
 }
 
@@ -285,19 +247,17 @@ const fetchUsersList = async (req, res) => {
 const setPhoto = async (req, res) => {
   upload(req, res, async (err) => {
     if (err instanceof multer.MulterError) {
-      errorMessage.error = 'Upload was not successful'
-      return res.status(status.error).send(errorMessage)
+      catchError('Upload was not successful', 'error', res)
     } else if (err) {
-      errorMessage.error = 'An error occurred when uploading'
-      return res.status(status.error).send(errorMessage)
+      catchError('An error occured when uploading', 'error', res)
     }
     // Everything went fine with multer and uploading
     const photoName = req.uploaded_photo_name
     if (!photoName) {
-      errorMessage.error = 'Faced issues saving photo'
-      return res.status(status.error).send(errorMessage)
+      catchError('Faced issues saving photo', 'error', res)
     }
     const { username } = req.user
+    const updated_at = moment(new Date())
     try {
       const path =
         process.env.SERVER_URL +
@@ -306,14 +266,109 @@ const setPhoto = async (req, res) => {
         '/' +
         process.env.UPLOAD_DIR_USER +
         photoName
-      await db('users').where({ username: username }).update({ photo: path })
+      await db('users')
+        .where({ username: username })
+        .update({ photo: path, updated_at: updated_at })
       successMessage.photo_path = path
       return res.status(status.success).send(successMessage)
     } catch (error) {
-      errorMessage.error = 'Operation was not successful'
-      return res.status(status.error).send(errorMessage)
+      catchError('Operation was not successful', 'error', res)
     }
   })
+}
+
+/**
+ * Update user general
+ * @param {object} req
+ * @param {object} res
+ * @returns {object} user object
+ */
+const updateUser = async (req, res) => {
+  const { user_id } = req.user
+  const old_username = req.user.username
+  const {
+    first_name,
+    last_name,
+    gender,
+    city,
+    bio,
+    height,
+    sports,
+    old_password,
+    new_password,
+  } = req.body
+  const new_username = req.body.username
+  const updated_at = moment(new Date())
+  const columnsToBeUpdated = {
+    first_name,
+    last_name,
+    gender,
+    city,
+    bio,
+    height,
+    sports,
+    updated_at,
+  }
+
+  const updateQuery = db('users').where({ id: user_id })
+
+  let thisUser
+  if (!isEmpty(new_password) || !isEmpty(new_username)) {
+    try {
+      thisUser = await db
+        .select('password_hash', 'username')
+        .from({ u: 'users' })
+        .where('u.id', user_id)
+        .first()
+    } catch (error) {
+      catchError('Could not fetch user from database', 'error', res)
+    }
+  }
+  if (!isEmpty(new_password)) {
+    // Check if old password is empty
+    if (isEmpty(old_password)) {
+      catchError('Old password is missing', 'bad', res)
+    }
+    // Check if passwords are short
+    if (!validatePassword(new_password) || !validatePassword(old_password)) {
+      catchError('Short password', 'bad', res)
+    }
+    // Check if the right password
+    if (!comparePassword(thisUser.password_hash, old_password)) {
+      catchError('Password is incorrect', 'bad', res)
+    }
+    columnsToBeUpdated['password_hash'] = hashString(new_password)
+  }
+  if (!isEmpty(new_username)) {
+    columnsToBeUpdated['username'] = new_username
+  }
+  try {
+    // Actually do the update query
+    await updateQuery.update(columnsToBeUpdated)
+    // Fetch the same user after the update
+    const user = await fetchThisUser(user_id, 'id')
+    // Generate token for user
+    const token = generateUserToken(
+      user.username,
+      user.id,
+      user.scopes,
+      user.first_name,
+      user.last_name,
+      user.gender,
+      user.height
+    )
+    delete user.password_hash
+    // Create user obj with token && send to client
+    successMessage.user = user
+    successMessage.user.token = token
+    return res.status(status.success).send(successMessage)
+  } catch (error) {
+    if (error.routine === '_bt_check_unique') {
+      catchError('Username already exists', 'conflict', res)
+    } else {
+      catchError('Operation was not successfull', 'error', res)
+    }
+  }
 }
 
 /**
@@ -323,18 +378,15 @@ const setPhoto = async (req, res) => {
  * @returns {object} updated user
  */
 const updateUserScopes = async (req, res) => {
-  const { id } = req.params
+  const { user_id } = req.params
   const { scopesToBeGiven } = req.body
 
   const { scopes } = req.user
   if (!scopes.includes('edit_sbs_scopes')) {
-    errorMessage.error =
-      'Sorry. You are unauthorized to give privilages to a user'
-    return res.status(status.bad).send(errorMessage)
+    catchError('Sorry, you are not allowed to do this', 'bad', res)
   }
   if (isEmpty(scopesToBeGiven)) {
-    errorMessage.error = 'Scopes array is needed'
-    return res.status(status.bad).send(errorMessage)
+    catchError('Scopes array is needed', 'bad', res)
   }
   const findUserQuery = 'SELECT * FROM users WHERE id=$1'
   const updateUser = `UPDATE users
@@ -343,8 +395,7 @@ const updateUserScopes = async (req, res) => {
     const { rows } = await dbQuery.query(findUserQuery, [id])
     const dbResponse = rows[0]
     if (!dbResponse) {
-      errorMessage.error = 'User could not be found'
-      return res.status(status.notfound).send(errorMessage)
+      catchError('User could not be found', 'notFound', res)
     }
     const values = [scopesToBeGiven, id]
     const response = await dbQuery.query(updateUser, values)
@@ -353,9 +404,44 @@ const updateUserScopes = async (req, res) => {
     successMessage.data = dbResult
     return res.status(status.success).send(successMessage)
   } catch (error) {
-    errorMessage.error = 'Operation was not successful'
-    return res.status(status.error).send(errorMessage)
+    catchError('Operation was not successful', 'error', res)
   }
+}
+
+/**
+ * Fetch user from DB
+ * @param {integer} id
+ * @returns {object} user
+ */
+const fetchThisUser = async (value, whichColoumn) =>
+  await db
+    .select(
+      'id',
+      'username',
+      'password_hash',
+      'scopes',
+      'first_name',
+      'last_name',
+      'gender',
+      'height',
+      'bio',
+      'photo',
+      'sports',
+      'photos',
+      'friends',
+      'verified',
+      'city',
+      'created_at',
+      'updated_at'
+    )
+    .from({ u: 'users' })
+    .where(`u.${whichColoumn}`, value)
+    .first()
+
+// Send a response based on the type of error occured
+const catchError = function (message, errorType, res) {
+  errorMessage.error = message
+  return res.status(status[errorType]).send(errorMessage)
 }
 
 module.exports = {
@@ -363,6 +449,7 @@ module.exports = {
   siginUser,
   fetchUser,
   setPhoto,
+  updateUser,
   fetchUsersList,
   updateUserScopes,
 }
