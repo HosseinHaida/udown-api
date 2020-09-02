@@ -139,11 +139,10 @@ const siginUser = async (req, res) => {
       successMessage.user.token = token
       return res.status(status.success).send(successMessage)
     } else {
-      catchError('Username does not exist', 'error', res)
+      catchError('Username does not exist', 'notfound', res)
     }
   } catch (error) {
-    console.log(error)
-    catchError('Could not find user', 'error', res)
+    catchError('Operation was not successful', 'error', res)
   }
 }
 
@@ -160,7 +159,7 @@ const fetchUser = async (req, res) => {
     const thisUser = await fetchThisUser(user_id, 'id')
     // Check if no one was found
     if (!thisUser) {
-      catchError('User could not be found', 'notFound', res)
+      catchError('User could not be found', 'notfound', res)
     }
     delete thisUser.password_hash
     // Create user obj with token && send to client
@@ -227,7 +226,7 @@ const fetchUsersList = async (req, res) => {
     const users = await query
     // Check if no one was found
     if (isEmpty(users)) {
-      catchError('Could not find any user', 'notFound', res)
+      catchError('Could not find any user', 'notfound', res)
     }
     successMessage.users = users
     successMessage.total = totalCount
@@ -395,7 +394,7 @@ const updateUserScopes = async (req, res) => {
     const { rows } = await dbQuery.query(findUserQuery, [id])
     const dbResponse = rows[0]
     if (!dbResponse) {
-      catchError('User could not be found', 'notFound', res)
+      catchError('User could not be found', 'notfound', res)
     }
     const values = [scopesToBeGiven, id]
     const response = await dbQuery.query(updateUser, values)
