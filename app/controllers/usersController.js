@@ -245,6 +245,27 @@ const fetchUsersList = async (req, res) => {
  * @returns {object} updated user
  */
 const setPhoto = async (req, res) => {
+  const { username } = req.user
+  try {
+    // Fetch user photo column from users to see
+    // if the user already has a photo assigned
+    const thisUser = await db('users')
+      .select('photo')
+      .where('username', username)
+      .first()
+    if (!isEmpty(thisUser.photo)) {
+      // Pick photo name from the end of the previous photo URL
+      const prevPhotoName = /[^/]*$/.exec(thisUser.photo)[0]
+      const relativePathToPrevPhoto =
+        process.env.UPLOAD_DIR + process.env.UPLOAD_DIR_USER + prevPhotoName
+      fs.unlink(relativePathToPrevPhoto, function (err) {
+        if (err) console.log('Could not find and delete previous photo')
+      })
+    }
+  } catch (error) {
+    return catchError('Error looking for previous photo', 'error', res)
+  }
+  // Actually do the upload
   upload(req, res, async (err) => {
     if (err instanceof multer.MulterError) {
       return catchError('Upload was not successful', 'error', res)
@@ -256,8 +277,8 @@ const setPhoto = async (req, res) => {
     if (!photoName) {
       return catchError('Faced issues saving photo', 'error', res)
     }
-    const { username } = req.user
     try {
+      // Generate photo URL to be saved with user in DB
       const path =
         process.env.SERVER_URL +
         ':' +
@@ -265,23 +286,6 @@ const setPhoto = async (req, res) => {
         '/' +
         process.env.UPLOAD_DIR_USER +
         photoName
-      const thisUser = await db('users')
-        .select('photo')
-        .where('username', username)
-        .first()
-      if (!isEmpty(thisUser.photo)) {
-        const prevPhotoName = /[^/]*$/.exec(thisUser.photo)[0]
-        const relativePathToPrevPhoto =
-          process.env.UPLOAD_DIR + process.env.UPLOAD_DIR_USER + prevPhotoName
-        fs.unlink(relativePathToPrevPhoto, function (err) {
-          if (err)
-            return catchError(
-              'Could not find and delete previous photo',
-              'error',
-              res
-            )
-        })
-      }
       const updated_at = moment(new Date())
       await db('users')
         .where({ username: username })

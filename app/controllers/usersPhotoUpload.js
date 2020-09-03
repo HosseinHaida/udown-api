@@ -9,10 +9,7 @@ var storage = multer.diskStorage({
     const { username } = req.user
     const fileNameSplitedByDots = file.originalname.split('.')
     const fileFormat = fileNameSplitedByDots[fileNameSplitedByDots.length - 1]
-    let weirdName = ''
-    for (let i = 0; i < username.length; i++) {
-      weirdName = weirdName.concat(username.charCodeAt(i) + i * (i + 4))
-    }
+    let weirdName = username + Math.floor(Math.random() * 10000000000000)
     const fileNameToBeSaved = weirdName + '.' + fileFormat
     cb(null, fileNameToBeSaved)
     req.uploaded_photo_name = fileNameToBeSaved
