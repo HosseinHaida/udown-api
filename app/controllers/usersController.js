@@ -1,4 +1,5 @@
 const db = require('../db').Instance()
+var fs = require('fs')
 const moment = require('moment')
 const {
   hashString,
@@ -256,7 +257,6 @@ const setPhoto = async (req, res) => {
       return catchError('Faced issues saving photo', 'error', res)
     }
     const { username } = req.user
-    const updated_at = moment(new Date())
     try {
       const path =
         process.env.SERVER_URL +
@@ -265,6 +265,24 @@ const setPhoto = async (req, res) => {
         '/' +
         process.env.UPLOAD_DIR_USER +
         photoName
+      const thisUser = await db('users')
+        .select('photo')
+        .where('username', username)
+        .first()
+      if (!isEmpty(thisUser.photo)) {
+        const prevPhotoName = /[^/]*$/.exec(thisUser.photo)[0]
+        const relativePathToPrevPhoto =
+          process.env.UPLOAD_DIR + process.env.UPLOAD_DIR_USER + prevPhotoName
+        fs.unlink(relativePathToPrevPhoto, function (err) {
+          if (err)
+            return catchError(
+              'Could not find and delete previous photo',
+              'error',
+              res
+            )
+        })
+      }
+      const updated_at = moment(new Date())
       await db('users')
         .where({ username: username })
         .update({ photo: path, updated_at: updated_at })
