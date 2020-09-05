@@ -12,7 +12,7 @@ const {
 const { errorMessage, successMessage, status } = require('../helpers/status')
 const { upload } = require('./usersPhotoUpload')
 const multer = require('multer')
-const { search } = require('../routes/usersRoute')
+const { search, all } = require('../routes/usersRoute')
 
 /**
  * Signup
@@ -154,10 +154,11 @@ const siginUser = async (req, res) => {
  * @returns {object} user object
  */
 const fetchUser = async (req, res) => {
-  const { username, user_id } = req.user
+  const { user_id } = req.user
   try {
     // Find user in DB
     const thisUser = await fetchThisUser(user_id, 'id')
+    const userRequests = await fetchThisUserRequests(user_id)
     // Check if no one was found
     if (!thisUser) {
       return catchError('User could not be found', 'notfound', res)
@@ -165,6 +166,7 @@ const fetchUser = async (req, res) => {
     delete thisUser.password_hash
     // Create user obj with token && send to client
     successMessage.user = thisUser
+    successMessage.user.requests = userRequests
     return res.status(status.success).send(successMessage)
   } catch (error) {
     return catchError('Operation was not successful', 'error', res)
@@ -172,7 +174,7 @@ const fetchUser = async (req, res) => {
 }
 
 /**
- * Fetch users list (search also practical)
+ * Fetch users list ( + search implementation)
  * @param {object} req
  * @param {object} res
  * @returns {object} user object
@@ -306,7 +308,6 @@ const setPhoto = async (req, res) => {
  */
 const updateUser = async (req, res) => {
   const { user_id } = req.user
-  const old_username = req.user.username
   const {
     first_name,
     last_name,
@@ -320,6 +321,7 @@ const updateUser = async (req, res) => {
   } = req.body
   const new_username = req.body.username
   const updated_at = moment(new Date())
+
   const columnsToBeUpdated = {
     first_name,
     last_name,
@@ -368,6 +370,8 @@ const updateUser = async (req, res) => {
     await updateQuery.update(columnsToBeUpdated)
     // Fetch the same user after the update
     const user = await fetchThisUser(user_id, 'id')
+    // Fetch all user requests
+    const userRequests = await fetchThisUserRequests(user_id)
     // Generate token for user
     const token = generateUserToken(
       user.username,
@@ -381,12 +385,132 @@ const updateUser = async (req, res) => {
     delete user.password_hash
     // Create user obj with token && send to client
     successMessage.user = user
+    successMessage.user.requests = userRequests
     successMessage.user.token = token
     return res.status(status.success).send(successMessage)
   } catch (error) {
     if (error.routine === '_bt_check_unique') {
       return catchError('Username already exists', 'conflict', res)
     } else {
+      return catchError('Operation was not successfull', 'error', res)
+    }
+  }
+}
+
+/**
+ * Insert friend request or make'em friends
+ * if the request exists the other way too
+ * @param {object} req
+ * @param {object} res
+ * @returns {object} reflection object
+ */
+const makeFriendsWith = async (req, res) => {
+  const { requestee_id } = req.body
+  if (isEmpty(requestee_id)) {
+    return catchError('Do not know who to send the request to', 'bad', res)
+  }
+  const { user_id } = req.user
+  try {
+    const sameRequest = await db('friend_requests')
+      .count('*')
+      .where({ requester_id: user_id, requestee_id: requestee_id })
+      .first()
+    // If the request already exists
+    if (Number(sameRequest.count) === 1) {
+      return catchError('Request already exists', 'conflict', res)
+    }
+    // Fetch friends of both users
+    const userFriendsQuery = db
+      .select('friends')
+      .from({ u: 'users' })
+      .where('u.id', user_id)
+      .first()
+    const user = await userFriendsQuery
+    const userQuery = db('users').where({ id: user_id })
+    const requestee = await db
+      .select('friends')
+      .from({ u: 'users' })
+      .where('u.id', requestee_id)
+      .first()
+    const requesteeQuery = db('users').where({ id: requestee_id })
+    const sameRequestButFromTheOtherPerson = await db('friend_requests')
+      .count('*')
+      .where({ requester_id: requestee_id, requestee_id: user_id })
+      .first()
+    // If request exists from the other way around
+    if (Number(sameRequestButFromTheOtherPerson.count) === 1) {
+      await db('friend_requests')
+        .where({
+          requester_id: requestee_id,
+          requestee_id: user_id,
+        })
+        .del()
+      // user and requestee
+      const userFriendsUpdated = user.friends.concat([requestee_id])
+      const requesteeFriendsUpdated = requestee.friends.concat([user_id])
+      const updated_at = moment(new Date())
+      await userQuery.update({
+        friends: userFriendsUpdated,
+        updated_at: updated_at,
+      })
+      await requesteeQuery.update({
+        friends: requesteeFriendsUpdated,
+        updated_at: updated_at,
+      })
+      successMessage.message = 'You are friends now, because you both wanted to'
+    }
+    // If there is no similar request
+    if (
+      Number(sameRequest.count) === 0 &&
+      Number(sameRequestButFromTheOtherPerson.count) === 0
+    ) {
+      // user and requestee
+      // If they are already friends
+      if (
+        user.friends.includes(requestee_id) &&
+        requestee.friends.includes(user_id)
+      ) {
+        catchError('You are already friends', 'bad', res)
+      } else if (
+        !user.friends.includes(requestee_id) &&
+        requestee.friends.includes(user_id)
+      ) {
+        const updated_at = moment(new Date())
+        const userFriendsUpdated = user.friends.concat([requestee_id])
+        await userQuery.update({
+          friends: userFriendsUpdated,
+          updated_at: updated_at,
+        })
+        // console.log('updated userFriends')
+      } else if (
+        user.friends.includes(requestee_id) &&
+        !requestee.friends.includes(user_id)
+      ) {
+        const updated_at = moment(new Date())
+        const requesteeFriendsUpdated = requestee.friends.concat([user_id])
+        await requesteeQuery.update({
+          friends: requesteeFriendsUpdated,
+          updated_at: updated_at,
+        })
+        // console.log('updated requesteeFriends')
+      } else {
+        const created_at = moment(new Date())
+        await db('friend_requests').insert({
+          requester_id: user_id,
+          requestee_id,
+          created_at,
+        })
+        successMessage.message = 'Sent Request'
+      }
+    }
+
+    const thisUser = await userFriendsQuery
+    const allUserRequests = await fetchThisUserRequests(user_id)
+    successMessage.user_friends = thisUser.friends
+    successMessage.user_outbound_requests = allUserRequests
+    return res.status(status.created).send(successMessage)
+  } catch (error) {
+    {
       return catchError('Operation was not successfull', 'error', res)
     }
   }
@@ -459,6 +583,18 @@ const fetchThisUser = async (value, whichColoumn) =>
     .where(`u.${whichColoumn}`, value)
     .first()
 
+const fetchThisUserRequests = async (id) => {
+  const userRequests = await db
+    .select('requestee_id', 'created_at')
+    .from({ u: 'friend_requests' })
+    .where({ 'u.requester_id': id })
+  let userRequestsArray = []
+  userRequests.forEach((element) => {
+    userRequestsArray.push(element.requestee_id)
+  })
+  return userRequestsArray
+}
+
 // Send a response based on the type of error occured
 const catchError = function (message, errorType, res) {
   errorMessage.error = message
@@ -472,5 +608,6 @@ module.exports = {
   setPhoto,
   updateUser,
   fetchUsersList,
+  makeFriendsWith,
   updateUserScopes,
 }

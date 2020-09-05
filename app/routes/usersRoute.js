@@ -8,6 +8,7 @@ const {
   updateUserScopes,
   fetchUser,
   updateUser,
+  makeFriendsWith,
 } = require('../controllers/usersController.js')
 
 const verifyAuth = require('../middlewares/verifyAuth.js')
@@ -24,5 +25,6 @@ router.get('/users/list/:page/:how_many', fetchUsersList)
 router.post('/auth/set_photo', verifyAuth, setPhoto)
 router.put('/user/:id', verifyAuth, updateUserScopes)
 router.post('/auth/update', verifyAuth, updateUser)
+router.post('/auth/friend/request', verifyAuth, makeFriendsWith)
 
 module.exports = router
