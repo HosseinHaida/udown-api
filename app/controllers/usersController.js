@@ -174,13 +174,13 @@ const fetchUser = async (req, res) => {
 }
 
 /**
- * Fetch users list ( + search implementation)
+ * Fetch users list ( + [search, fetch only friends] implemented)
  * @param {object} req
  * @param {object} res
  * @returns {object} user object
  */
 const fetchUsersList = async (req, res) => {
-  const { how_many, page, search_text } = req.params
+  const { type, how_many, page, search_text } = req.params
   try {
     // Create query for total number of users
     const totalUsersQuery = db('users').count('*').first()
@@ -206,18 +206,33 @@ const fetchUsersList = async (req, res) => {
       .from('users')
       .offset((page - 1) * how_many)
       .limit(how_many)
+    // If type of users is set to 'friends'
+    let friendsIds = []
+    if (type === 'friends') {
+      const { user_id } = req.user
+      const user = await db
+        .select('friends')
+        .from('users')
+        .where({ id: user_id })
+        .first()
+
+      friendsIds = user.friends
+      console.log(friendsIds)
+      query.whereIn('id', friendsIds)
+      totalUsersQuery.whereIn('id', friendsIds)
+    }
 
     if (!isEmpty(search_text)) {
       const whereValue = `%${search_text.toLowerCase()}%`
       const whereKeyFor = (column) => `LOWER(${column}) LIKE ?`
       // Change query to fetch users based on search_text
       query
-        .whereRaw(whereKeyFor('username'), whereValue)
+        .orWhereRaw(whereKeyFor('username'), whereValue)
         .orWhereRaw(whereKeyFor('first_name'), whereValue)
         .orWhereRaw(whereKeyFor('last_name'), whereValue)
       // Change query for total number of users based on search_text
       totalUsersQuery
-        .whereRaw(whereKeyFor('username'), whereValue)
+        .orWhereRaw(whereKeyFor('username'), whereValue)
         .orWhereRaw(whereKeyFor('first_name'), whereValue)
         .orWhereRaw(whereKeyFor('last_name'), whereValue)
     }
