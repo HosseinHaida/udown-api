@@ -168,10 +168,32 @@ const fetchUser = async (req, res) => {
     delete thisUser.password_hash
     // Create user obj with token && send to client
     successMessage.user = thisUser
-    successMessage.user.requests = userRequests
+    successMessage.user.outbound_requests = userRequests
     return res.status(status.success).send(successMessage)
   } catch (error) {
     return catchError('Operation was not successful', 'error', res)
+  }
+}
+
+/**
+ * Fetch User inbound requests count
+ * @param {object} req
+ * @param {object} res
+ * @returns {object} user object
+ */
+const fetchInboundRequestsCount = async (req, res) => {
+  const { user_id } = req.user
+  try {
+    // Find all inbound reqs for user in DB
+    const reqs = await db('friend_requests')
+      .count('*')
+      .where('requestee_id', user_id)
+      .first()
+    const count = reqs.count
+    successMessage.inbound_requests_count = count
+    return res.status(status.success).send(successMessage)
+  } catch (error) {
+    return catchError('Could not fetch inbound requests count', 'error', res)
   }
 }
 
@@ -211,7 +233,7 @@ const fetchUsersList = async (req, res) => {
       .limit(how_many)
     // If type of users is set to 'friends'
     let friendsIds = []
-    if (req.route.path.includes('/friends/')) {
+    if (req.route.path.includes('/friends_only/')) {
       const { user_id } = req.user
       const user = await db
         .select('friends')
@@ -401,7 +423,7 @@ const updateUser = async (req, res) => {
     delete user.password_hash
     // Create user obj with token && send to client
     successMessage.user = user
-    successMessage.user.requests = userRequests
+    successMessage.user.outbound_requests = userRequests
     successMessage.user.token = token
     return res.status(status.success).send(successMessage)
   } catch (error) {
@@ -523,7 +545,7 @@ const makeFriendsWith = async (req, res) => {
     const thisUser = await userFriendsQuery
     const allUserRequests = await fetchThisUserRequests(user_id)
     successMessage.user_friends = thisUser.friends
-    successMessage.user_outbound_requests = allUserRequests
+    successMessage.outbound_requests = allUserRequests
     return res.status(status.created).send(successMessage)
   } catch (error) {
     {
@@ -626,4 +648,5 @@ module.exports = {
   fetchUsersList,
   makeFriendsWith,
   updateUserScopes,
+  fetchInboundRequestsCount,
 }
