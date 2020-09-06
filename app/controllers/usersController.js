@@ -14,6 +14,8 @@ const { upload } = require('./usersPhotoUpload')
 const multer = require('multer')
 const { search, all } = require('../routes/usersRoute')
 
+// const verifyAuth = require('../middlewares/verifyAuth.js')
+
 /**
  * Signup
  * @param {object} req
@@ -180,7 +182,8 @@ const fetchUser = async (req, res) => {
  * @returns {object} user object
  */
 const fetchUsersList = async (req, res) => {
-  const { type, how_many, page, search_text } = req.params
+  const { how_many, page, search_text } = req.params
+  const offset = (Number(page) - 1) * Number(how_many)
   try {
     // Create query for total number of users
     const totalUsersQuery = db('users').count('*').first()
@@ -204,20 +207,18 @@ const fetchUsersList = async (req, res) => {
         'created_at'
       )
       .from('users')
-      .offset((page - 1) * how_many)
+      .offset(offset)
       .limit(how_many)
     // If type of users is set to 'friends'
     let friendsIds = []
-    if (type === 'friends') {
+    if (req.route.path.includes('/friends/')) {
       const { user_id } = req.user
       const user = await db
         .select('friends')
         .from('users')
         .where({ id: user_id })
         .first()
-
       friendsIds = user.friends
-      console.log(friendsIds)
       query.whereIn('id', friendsIds)
       totalUsersQuery.whereIn('id', friendsIds)
     }
@@ -227,12 +228,12 @@ const fetchUsersList = async (req, res) => {
       const whereKeyFor = (column) => `LOWER(${column}) LIKE ?`
       // Change query to fetch users based on search_text
       query
-        .orWhereRaw(whereKeyFor('username'), whereValue)
+        .whereRaw(whereKeyFor('username'), whereValue)
         .orWhereRaw(whereKeyFor('first_name'), whereValue)
         .orWhereRaw(whereKeyFor('last_name'), whereValue)
       // Change query for total number of users based on search_text
       totalUsersQuery
-        .orWhereRaw(whereKeyFor('username'), whereValue)
+        .whereRaw(whereKeyFor('username'), whereValue)
         .orWhereRaw(whereKeyFor('first_name'), whereValue)
         .orWhereRaw(whereKeyFor('last_name'), whereValue)
     }
