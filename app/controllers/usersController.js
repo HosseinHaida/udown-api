@@ -204,7 +204,8 @@ const fetchInboundRequestsCount = async (req, res) => {
  * @returns {object} user object
  */
 const fetchUsersList = async (req, res) => {
-  const { how_many, page, search_text } = req.params
+  const { how_many, page, search_text } = req.query
+  const { type } = req.params
   const offset = (Number(page) - 1) * Number(how_many)
   try {
     // Create query for total number of users
@@ -231,33 +232,35 @@ const fetchUsersList = async (req, res) => {
       .from('users')
       .offset(offset)
       .limit(how_many)
+
     // If type of users is set to 'friends'
-    let friendsIds = []
-    if (req.route.path.includes('/friends_only/')) {
+    let friends = []
+    if (type === 'friends') {
       const { user_id } = req.user
       const user = await db
         .select('friends')
         .from('users')
         .where({ id: user_id })
         .first()
-      friendsIds = user.friends
-      query.whereIn('id', friendsIds)
-      totalUsersQuery.whereIn('id', friendsIds)
+      friends = user.friends
+      query.whereIn('id', friends)
+      totalUsersQuery.whereIn('id', friends)
     }
-
     if (!isEmpty(search_text)) {
-      const whereValue = `%${search_text.toLowerCase()}%`
-      const whereKeyFor = (column) => `LOWER(${column}) LIKE ?`
+      const where = (column) =>
+        type === 'friends'
+          ? `LOWER(${column}) LIKE '%${search_text.toLowerCase()}%' AND id IN (${friends})`
+          : `LOWER(${column}) LIKE '%${search_text.toLowerCase()}%'`
       // Change query to fetch users based on search_text
       query
-        .whereRaw(whereKeyFor('username'), whereValue)
-        .orWhereRaw(whereKeyFor('first_name'), whereValue)
-        .orWhereRaw(whereKeyFor('last_name'), whereValue)
+        .whereRaw(where('username'))
+        .orWhereRaw(where('first_name'))
+        .orWhereRaw(where('last_name'))
       // Change query for total number of users based on search_text
       totalUsersQuery
-        .whereRaw(whereKeyFor('username'), whereValue)
-        .orWhereRaw(whereKeyFor('first_name'), whereValue)
-        .orWhereRaw(whereKeyFor('last_name'), whereValue)
+        .whereRaw(where('username'))
+        .orWhereRaw(where('first_name'))
+        .orWhereRaw(where('last_name'))
     }
     // Calculate number of users and pages
     const total = await totalUsersQuery

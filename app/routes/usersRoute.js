@@ -29,12 +29,15 @@ router.get(
   verifyAuth,
   fetchInboundRequestsCount
 )
+router.get('/users/list/:type', verifyAuth, fetchUsersList)
+router.get('/users/list', fetchUsersList)
+
 // fetch users routes
-router.get(
-  '/users/list/friends_only/:page/:how_many/:search_text?',
-  verifyAuth,
-  fetchUsersList
-)
-router.get('/users/list/:page/:how_many/:search_text?', fetchUsersList)
+// router.get(
+//   '/users/list/friends_only/:page/:how_many/:search_text?',
+//   verifyAuth,
+//   fetchUsersList
+// )
+// router.get('/users/list/:page/:how_many/:search_text?', fetchUsersList)
 
 module.exports = router
