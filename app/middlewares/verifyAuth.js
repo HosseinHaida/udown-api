@@ -23,7 +23,6 @@ const verifyToken = async (req, res, next) => {
     req.user = {
       user_id: decoded.user_id,
       username: decoded.username,
-      user_scopes: decoded.scopes,
       first_name: decoded.first_name,
       last_name: decoded.last_name,
     }

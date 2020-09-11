@@ -27,6 +27,8 @@ exports.seed = function (knex) {
             'edit_locations',
             'add_locations',
             'edit_events',
+            'add_events',
+            'suspend_admins',
           ],
           verified: true,
         },
@@ -47,7 +49,7 @@ exports.seed = function (knex) {
           sports: ['basketball'],
           photos: [],
           friends: [],
-          scopes: [],
+          scopes: ['add_events'],
           verified: true,
         },
         {
@@ -67,13 +69,13 @@ exports.seed = function (knex) {
           sports: ['basketball'],
           photos: [],
           friends: [],
-          scopes: [],
+          scopes: ['add_events'],
           verified: true,
         },
         {
           password_hash:
             '$2a$10$FeqkWFlhSAWYzihpiG.GL.MOk3p7.zsDLL3L8QgTKb1pH/p.PkkDK',
-          gender: 'Feale',
+          gender: 'Female',
           city: 'Esfahan',
           first_name: 'Masoome',
           last_name: 'Ismaili',
@@ -87,7 +89,14 @@ exports.seed = function (knex) {
           sports: ['basketball'],
           photos: [],
           friends: [],
-          scopes: ['edit_locations', 'add_locations', 'edit_events'],
+          scopes: [
+            'edit_users_scopes',
+            'edit_locations',
+            'add_locations',
+            'edit_events',
+            'add_events',
+            'suspend_admins',
+          ],
           verified: true,
         },
         {
@@ -107,7 +116,7 @@ exports.seed = function (knex) {
           sports: ['basketball'],
           photos: [],
           friends: [],
-          scopes: ['add_locations', 'edit_events'],
+          scopes: ['add_locations', 'edit_events', 'add_events'],
           verified: true,
         },
         {
@@ -128,7 +137,6 @@ exports.seed = function (knex) {
           photos: [],
           friends: [],
           scopes: [
-            'edit_users_scopes',
             'edit_locations',
             'add_locations',
             'edit_events',
@@ -153,13 +161,7 @@ exports.seed = function (knex) {
           sports: ['basketball'],
           photos: [],
           friends: [],
-          scopes: [
-            'edit_users_scopes',
-            'edit_locations',
-            'add_locations',
-            'edit_events',
-            'add_events',
-          ],
+          scopes: ['add_locations', 'edit_events', 'add_events'],
           verified: true,
         },
       ])

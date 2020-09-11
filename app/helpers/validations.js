@@ -73,7 +73,6 @@ const empty = (input) => {
 const generateUserToken = (
   username,
   id,
-  scopes,
   first_name,
   last_name,
   gender,
@@ -83,7 +82,6 @@ const generateUserToken = (
     {
       username,
       user_id: id,
-      scopes,
       first_name,
       last_name,
       gender,

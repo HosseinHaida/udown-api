@@ -1,4 +1,3 @@
-// const { errorMessage, status } = require('../helpers/status')
 const multer = require('multer')
 
 var storage = multer.diskStorage({

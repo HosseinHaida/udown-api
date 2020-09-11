@@ -12,7 +12,6 @@ const {
 const { errorMessage, successMessage, status } = require('../helpers/status')
 const { upload } = require('./usersPhotoUpload')
 const multer = require('multer')
-const { search, all } = require('../routes/usersRoute')
 
 // const verifyAuth = require('../middlewares/verifyAuth.js')
 
@@ -57,7 +56,9 @@ const signupUser = async (req, res) => {
     gender,
     height,
     sports,
+    scopes: ['add_events'],
     friends: [],
+    scopes: [],
     created_at,
   }
   try {
@@ -65,15 +66,7 @@ const signupUser = async (req, res) => {
     const r = await db('users').insert(userPayload)
     // Select the same user from DB
     const thisUser = await db
-      .select(
-        'username',
-        'id',
-        'scopes',
-        'first_name',
-        'last_name',
-        'gender',
-        'height'
-      )
+      .select('username', 'id', 'first_name', 'last_name', 'gender', 'height')
       .from({ u: 'users' })
       .where('u.username', userPayload.username)
       .first()
@@ -81,7 +74,6 @@ const signupUser = async (req, res) => {
     const token = generateUserToken(
       thisUser.username,
       thisUser.id,
-      thisUser.scopes,
       thisUser.first_name,
       thisUser.last_name,
       thisUser.gender,
@@ -130,7 +122,6 @@ const siginUser = async (req, res) => {
       const token = generateUserToken(
         thisUser.username,
         thisUser.id,
-        thisUser.scopes,
         thisUser.first_name,
         thisUser.last_name,
         thisUser.gender,
@@ -161,6 +152,7 @@ const fetchUser = async (req, res) => {
     // Find user in DB
     const thisUser = await fetchThisUser(user_id, 'id')
     const userRequests = await fetchThisUserRequests(user_id)
+    const userRequestsInbound = await fetchThisUserRequestsInbound(user_id)
     // Check if no one was found
     if (!thisUser) {
       return catchError('User could not be found', 'notfound', res)
@@ -169,6 +161,7 @@ const fetchUser = async (req, res) => {
     // Create user obj with token && send to client
     successMessage.user = thisUser
     successMessage.user.outbound_requests = userRequests
+    successMessage.user.inbound_requests = userRequestsInbound
     return res.status(status.success).send(successMessage)
   } catch (error) {
     return catchError('Operation was not successful', 'error', res)
@@ -198,7 +191,7 @@ const fetchInboundRequestsCount = async (req, res) => {
 }
 
 /**
- * Fetch users list ( + [search, fetch only friends] implemented)
+ * Fetch users list ( + [search, friends, requests] implemented)
  * @param {object} req
  * @param {object} res
  * @returns {object} user object
@@ -212,6 +205,7 @@ const fetchUsersList = async (req, res) => {
     const totalUsersQuery = db('users').count('*').first()
     // Create query to fetch users
     const query = db
+      .from('users')
       .select(
         'id',
         'username',
@@ -229,7 +223,6 @@ const fetchUsersList = async (req, res) => {
         'city',
         'created_at'
       )
-      .from('users')
       .offset(offset)
       .limit(how_many)
 
@@ -246,11 +239,25 @@ const fetchUsersList = async (req, res) => {
       query.whereIn('id', friends)
       totalUsersQuery.whereIn('id', friends)
     }
+    // If type of users is set to 'requests'
+    let userInboundRequests = []
+    if (type === 'requests') {
+      const { user_id } = req.user
+      userInboundRequests = await fetchThisUserRequestsInbound(user_id)
+      query.whereIn('id', userInboundRequests)
+      totalUsersQuery.whereIn('id', userInboundRequests)
+    }
     if (!isEmpty(search_text)) {
-      const where = (column) =>
-        type === 'friends'
-          ? `LOWER(${column}) LIKE '%${search_text.toLowerCase()}%' AND id IN (${friends})`
-          : `LOWER(${column}) LIKE '%${search_text.toLowerCase()}%'`
+      const where = (column) => {
+        let whereClause = `LOWER(${column}) LIKE '%${search_text.toLowerCase()}%'`
+        if (type === 'friends') {
+          whereClause += ` AND id IN (${friends})`
+        }
+        if (type === 'requests') {
+          whereClause += ` AND id IN (${userInboundRequests})`
+        }
+        return whereClause
+      }
       // Change query to fetch users based on search_text
       query
         .whereRaw(where('username'))
@@ -413,11 +420,11 @@ const updateUser = async (req, res) => {
     const user = await fetchThisUser(user_id, 'id')
     // Fetch all user requests
     const userRequests = await fetchThisUserRequests(user_id)
+    const userRequestsInbound = await fetchThisUserRequestsInbound(user_id)
     // Generate token for user
     const token = generateUserToken(
       user.username,
       user.id,
-      user.scopes,
       user.first_name,
       user.last_name,
       user.gender,
@@ -427,6 +434,7 @@ const updateUser = async (req, res) => {
     // Create user obj with token && send to client
     successMessage.user = user
     successMessage.user.outbound_requests = userRequests
+    successMessage.user.inbound_requests = userRequestsInbound
     successMessage.user.token = token
     return res.status(status.success).send(successMessage)
   } catch (error) {
@@ -441,6 +449,7 @@ const updateUser = async (req, res) => {
 /**
  * Insert friend request or make'em friends
  * if the request exists the other way too
+ * or remove friend
  * @param {object} req
  * @param {object} res
  * @returns {object} reflection object
@@ -486,6 +495,12 @@ const makeFriendsWith = async (req, res) => {
           requestee_id: user_id,
         })
         .del()
+      const reqs = await db('friend_requests')
+        .count('*')
+        .where('requestee_id', user_id)
+        .first()
+      const count = reqs.count
+
       // user and requestee
       const userFriendsUpdated = user.friends.concat([requestee_id])
       const requesteeFriendsUpdated = requestee.friends.concat([user_id])
@@ -498,7 +513,8 @@ const makeFriendsWith = async (req, res) => {
         friends: requesteeFriendsUpdated,
         updated_at: updated_at,
       })
-      successMessage.message = 'You are friends now, because you both wanted to'
+      successMessage.inbound_requests_count = count
+      successMessage.message = 'You are now friends'
     }
     // If there is no similar request
     if (
@@ -511,7 +527,23 @@ const makeFriendsWith = async (req, res) => {
         user.friends.includes(requestee_id) &&
         requestee.friends.includes(user_id)
       ) {
-        catchError('You are already friends', 'bad', res)
+        // Remove one another from the friends array of each user
+        const userFriendsUpdated = user.friends.filter(function (id) {
+          return id !== requestee_id
+        })
+        const requesteeFriendsUpdated = requestee.friends.filter(function (id) {
+          return id !== user_id
+        })
+        const updated_at = moment(new Date())
+        await userQuery.update({
+          friends: userFriendsUpdated,
+          updated_at: updated_at,
+        })
+        await requesteeQuery.update({
+          friends: requesteeFriendsUpdated,
+          updated_at: updated_at,
+        })
+        successMessage.message = 'You removed him/her from your friends'
       } else if (
         !user.friends.includes(requestee_id) &&
         requestee.friends.includes(user_id)
@@ -547,8 +579,10 @@ const makeFriendsWith = async (req, res) => {
 
     const thisUser = await userFriendsQuery
     const allUserRequests = await fetchThisUserRequests(user_id)
+    const allUserRequestsInbound = await fetchThisUserRequestsInbound(user_id)
     successMessage.user_friends = thisUser.friends
     successMessage.outbound_requests = allUserRequests
+    successMessage.inbound_requests = allUserRequestsInbound
     return res.status(status.created).send(successMessage)
   } catch (error) {
     {
@@ -557,6 +591,29 @@ const makeFriendsWith = async (req, res) => {
   }
 }
 
+// /**
+//  * Fetch a users scopes
+//  * @param {object} req
+//  * @param {object} res
+//  * @returns {object} user object
+//  */
+// const fetchUserScopes = async (req, res) => {
+//   const { id } = req.params
+//   try {
+//     // Find user in DB
+//     const thisUser = await db('users').select('scopes').where('id', id).first()
+//     // Check if no one was found
+//     if (!thisUser) {
+//       return catchError('User could not be found', 'notfound', res)
+//     }
+//     // Create user obj with token && send to client
+//     successMessage.scopes = thisUser.scopes
+//     return res.status(status.success).send(successMessage)
+//   } catch (error) {
+//     return catchError('Operation was not successful', 'error', res)
+//   }
+// }
+
 /**
  * Update scopes of a user
  * @param {object} req
@@ -564,30 +621,67 @@ const makeFriendsWith = async (req, res) => {
  * @returns {object} updated user
  */
 const updateUserScopes = async (req, res) => {
-  const { user_id } = req.params
-  const { scopesToBeGiven } = req.body
-
-  const { scopes } = req.user
-  if (!scopes.includes('edit_sbs_scopes')) {
-    return catchError('Sorry, you are not allowed to do this', 'bad', res)
-  }
-  if (isEmpty(scopesToBeGiven)) {
-    return catchError('Scopes array is needed', 'bad', res)
-  }
-  const findUserQuery = 'SELECT * FROM users WHERE id=$1'
-  const updateUser = `UPDATE users
-        SET scopes=$1 WHERE id=$2 returning *`
+  const { user_id } = req.user
+  const { scopes, id } = req.body
   try {
-    const { rows } = await dbQuery.query(findUserQuery, [id])
-    const dbResponse = rows[0]
-    if (!dbResponse) {
-      return catchError('User could not be found', 'notfound', res)
+    const loggedInUser = await db('users')
+      .select('scopes')
+      .where({ id: user_id })
+      .first()
+    if (!loggedInUser.scopes.includes('edit_users_scopes')) {
+      return catchError('Sorry, you are not allowed to do this', 'bad', res)
     }
-    const values = [scopesToBeGiven, id]
-    const response = await dbQuery.query(updateUser, values)
-    const dbResult = response.rows[0]
-    delete dbResult.password
-    successMessage.data = dbResult
+    if (isEmpty(scopes)) {
+      return catchError('Scopes array is empty', 'bad', res)
+    }
+    const usersPreviousScopes = await db('users')
+      .select('scopes', 'username')
+      .where({ id: id })
+      .first()
+    const userCouldUpdateOthersScopes = usersPreviousScopes.scopes.includes(
+      'edit_users_scopes'
+    )
+    const userCouldSuspendAdmins = usersPreviousScopes.scopes.includes(
+      'suspend_admins'
+    )
+    const newScopesDoesnotAllowUserToDoSo = !scopes.includes(
+      'edit_users_scopes'
+    )
+    const withNewScopesUserCanSuspendAdmins = scopes.includes('suspend_admins')
+    const loggedInUserCanSuspendAdmins = loggedInUser.scopes.includes(
+      'suspend_admins'
+    )
+    if (
+      usersPreviousScopes.scopes.sort().join(',') === scopes.sort().join(',')
+    ) {
+      return catchError('Scopes unchanged', 'bad', res)
+    }
+    if (
+      userCouldUpdateOthersScopes &&
+      newScopesDoesnotAllowUserToDoSo &&
+      !loggedInUserCanSuspendAdmins
+    ) {
+      return catchError('Sorry, you can not suspend admins', 'bad', res)
+    }
+    if (
+      !loggedInUserCanSuspendAdmins &&
+      withNewScopesUserCanSuspendAdmins &&
+      !userCouldSuspendAdmins
+    ) {
+      return catchError("You can't let them do that", 'bad', res)
+    }
+    if (
+      userCouldSuspendAdmins &&
+      !withNewScopesUserCanSuspendAdmins &&
+      !loggedInUserCanSuspendAdmins
+    ) {
+      return catchError("You can't suspend them from suspending :|", 'bad', res)
+    }
+    const updated_at = moment(new Date())
+    await db('users')
+      .where({ id: id })
+      .update({ scopes: scopes, updated_at: updated_at, updated_by: user_id })
+    successMessage.scopes = scopes
     return res.status(status.success).send(successMessage)
   } catch (error) {
     return catchError('Operation was not successful', 'error', res)
@@ -636,6 +730,18 @@ const fetchThisUserRequests = async (id) => {
   return userRequestsArray
 }
 
+const fetchThisUserRequestsInbound = async (id) => {
+  const userRequests = await db
+    .select('requester_id', 'created_at')
+    .from({ u: 'friend_requests' })
+    .where({ 'u.requestee_id': id })
+  let userRequestsArray = []
+  userRequests.forEach((element) => {
+    userRequestsArray.push(element.requester_id)
+  })
+  return userRequestsArray
+}
+
 // Send a response based on the type of error occured
 const catchError = function (message, errorType, res) {
   errorMessage.error = message
@@ -650,6 +756,7 @@ module.exports = {
   updateUser,
   fetchUsersList,
   makeFriendsWith,
+  // fetchUserScopes,
   updateUserScopes,
   fetchInboundRequestsCount,
 }
