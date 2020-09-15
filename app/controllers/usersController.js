@@ -56,9 +56,8 @@ const signupUser = async (req, res) => {
     gender,
     height,
     sports,
-    scopes: ['add_events'],
+    scopes: ['add_events', 'add_comments'],
     friends: [],
-    scopes: [],
     created_at,
   }
   try {
@@ -467,7 +466,10 @@ const makeFriendsWith = async (req, res) => {
       .first()
     // If the request already exists
     if (Number(sameRequest.count) === 1) {
-      return catchError('Request already exists', 'conflict', res)
+      await db('friend_requests')
+        .where({ requester_id: user_id, requestee_id: requestee_id })
+        .del()
+      successMessage.message = 'Removed this friend request'
     }
     // Fetch friends of both users
     const userFriendsQuery = db
@@ -554,7 +556,6 @@ const makeFriendsWith = async (req, res) => {
           friends: userFriendsUpdated,
           updated_at: updated_at,
         })
-        // console.log('updated userFriends')
       } else if (
         user.friends.includes(requestee_id) &&
         !requestee.friends.includes(user_id)
@@ -565,7 +566,6 @@ const makeFriendsWith = async (req, res) => {
           friends: requesteeFriendsUpdated,
           updated_at: updated_at,
         })
-        // console.log('updated requesteeFriends')
       } else {
         const created_at = moment(new Date())
         await db('friend_requests').insert({
@@ -630,9 +630,6 @@ const updateUserScopes = async (req, res) => {
       .first()
     if (!loggedInUser.scopes.includes('edit_users_scopes')) {
       return catchError('Sorry, you are not allowed to do this', 'bad', res)
-    }
-    if (isEmpty(scopes)) {
-      return catchError('Scopes array is empty', 'bad', res)
     }
     const usersPreviousScopes = await db('users')
       .select('scopes', 'username')
