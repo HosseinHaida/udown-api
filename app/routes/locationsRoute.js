@@ -4,6 +4,7 @@ const {
   fetchLocationsList,
   fetchLocation,
   updateLocation,
+  insertLocation,
   comment,
   deleteComment,
   setPhoto,
@@ -18,6 +19,7 @@ const router = express.Router()
 router.get('/locations/list/:page/:how_many/:search_text?', fetchLocationsList)
 router.get('/location/fetch/:id', fetchLocation)
 router.post('/location/update', verifyAuth, updateLocation)
+router.post('/location/insert', verifyAuth, insertLocation)
 router.post('/location/comment', verifyAuth, comment)
 router.delete(
   '/location/comment/delete/:comment_id/:location_id',

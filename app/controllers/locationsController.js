@@ -44,7 +44,11 @@ const setPhoto = async (req, res) => {
       }
     }
   } catch (error) {
-    return catchError('Error looking for previous photo', 'error', res)
+    return catchError(
+      'Could not find location and/or maybe the previous photo',
+      'error',
+      res
+    )
   }
   // Actually do the upload
   upload(req, res, async (err) => {
@@ -231,7 +235,71 @@ const fetchLocation = async (req, res) => {
     successMessage.location.photos = photos
     return res.status(status.success).send(successMessage)
   } catch (error) {
-    return catchError('Operation was not successful', 'error', res)
+    return catchError('Could not find location', 'error', res)
+  }
+}
+
+/**
+ * Insert new location
+ * @param {object} req
+ * @param {object} res
+ * @returns {object} location object
+ */
+const insertLocation = async (req, res) => {
+  const { user_id } = req.user
+  const {
+    name,
+    maps_url,
+    city,
+    region,
+    cost,
+    meta,
+    sport_types,
+    girls_allowed,
+  } = req.body
+  const created_at = moment(new Date())
+  const columnsToBeInserted = {
+    name,
+    city,
+    region,
+    maps_url,
+    cost,
+    meta,
+    sport_types,
+    girls_allowed,
+    created_by: user_id,
+    created_at,
+  }
+  if (
+    isEmpty(name) ||
+    isEmpty(city) ||
+    isEmpty(region) ||
+    isEmpty(maps_url) ||
+    isEmpty(cost) ||
+    isEmpty(meta) ||
+    isEmpty(sport_types) ||
+    isEmpty(girls_allowed)
+  ) {
+    return catchError('Empty fields', 'bad', res)
+  }
+  const insertQuery = db('locations')
+  try {
+    const user = await db('users')
+      .select('scopes')
+      .where({ id: user_id })
+      .first()
+    if (!user.scopes.includes('edit_locations')) {
+      return catchError('You are not authorized to do this!', 'bad', res)
+    }
+    // Actually do the update query
+    await insertQuery.insert(columnsToBeInserted)
+    // Fetch the same location after the update
+    const location = await db('locations').select('*').where({ id: id }).first()
+    // Create location obj and send to client
+    successMessage.location = location
+    return res.status(status.success).send(successMessage)
+  } catch (error) {
+    return catchError('Insert was not successfull', 'error', res)
   }
 }
 
@@ -295,10 +363,12 @@ const updateLocation = async (req, res) => {
     // Fetch the same location after the update
     const location = await db('locations').select('*').where({ id: id }).first()
     const comments = await fetchLocationComments(id)
-
-    // Create location obj with comments && send to client
+    // Fetch photos
+    const photos = await fetchLocationPhotos(id)
+    // Create location obj with comments && photos and send to client
     successMessage.location = location
     successMessage.location.comments = comments
+    successMessage.location.photos = photos
     return res.status(status.success).send(successMessage)
   } catch (error) {
     return catchError('Operation was not successfull', 'error', res)
@@ -445,6 +515,7 @@ module.exports = {
   fetchLocationsList,
   fetchLocation,
   updateLocation,
+  insertLocation,
   comment,
   deleteComment,
   setPhoto,
