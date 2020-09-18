@@ -2,8 +2,10 @@ const db = require('../db').Instance()
 var fs = require('fs')
 const moment = require('moment')
 const { isEmpty } = require('../helpers/validations')
+const { catchError } = require('./catchError')
+const { userHasScope } = require('./scopesController')
 
-const { errorMessage, successMessage, status } = require('../helpers/status')
+const { successMessage, status } = require('../helpers/status')
 const { upload } = require('./locationsPhotoUpload')
 const multer = require('multer')
 
@@ -17,11 +19,7 @@ const setPhoto = async (req, res) => {
   const { location_id, index } = req.params
   const { user_id } = req.user
   try {
-    const user = await db('users')
-      .select('scopes')
-      .where({ id: user_id })
-      .first()
-    if (!user.scopes.includes('edit_locations')) {
+    if (!(await userHasScope(user_id, 'edit_locations'))) {
       return catchError('You can not edit locations', 'bad', res)
     }
     // fetch location photo if index was set to 'cover'
@@ -111,11 +109,7 @@ const deletePhoto = async (req, res) => {
   const { id, location_id } = req.params
   const { user_id } = req.user
   try {
-    const user = await db('users')
-      .select('scopes')
-      .where({ id: user_id })
-      .first()
-    if (!user.scopes.includes('edit_locations')) {
+    if (!(await userHasScope(user_id, 'edit_locations'))) {
       return catchError('You can not edit locations', 'bad', res)
     }
     const thisPhoto = await db('location_photos')
@@ -284,20 +278,12 @@ const insertLocation = async (req, res) => {
   }
   const insertQuery = db('locations')
   try {
-    const user = await db('users')
-      .select('scopes')
-      .where({ id: user_id })
-      .first()
-    if (!user.scopes.includes('edit_locations')) {
+    if (!(await userHasScope(user_id, 'edit_locations'))) {
       return catchError('You are not authorized to do this!', 'bad', res)
     }
     // Actually do the update query
     await insertQuery.insert(columnsToBeInserted)
-    // Fetch the same location after the update
-    const location = await db('locations').select('*').where({ id: id }).first()
-    // Create location obj and send to client
-    successMessage.location = location
-    return res.status(status.success).send(successMessage)
+    return res.status(status.success).send()
   } catch (error) {
     return catchError('Insert was not successfull', 'error', res)
   }
@@ -351,11 +337,7 @@ const updateLocation = async (req, res) => {
   }
   const updateQuery = db('locations').where({ id: id })
   try {
-    const user = await db('users')
-      .select('scopes')
-      .where({ id: user_id })
-      .first()
-    if (!user.scopes.includes('edit_locations')) {
+    if (!(await userHasScope(user_id, 'edit_locations'))) {
       return catchError('You are not authorized to do this!', 'bad', res)
     }
     // Actually do the update query
@@ -397,11 +379,7 @@ const comment = async (req, res) => {
     return catchError('Empty fields', 'bad', res)
   }
   try {
-    const user = await db('users')
-      .select('scopes')
-      .where({ id: user_id })
-      .first()
-    if (!user.scopes.includes('add_comments')) {
+    if (!(await userHasScope(user_id, 'add_comments'))) {
       return catchError('You are not authorized to comment', 'bad', res)
     }
     // Actually do the insert
@@ -429,16 +407,12 @@ const deleteComment = async (req, res) => {
     return catchError('Empty fields', 'bad', res)
   }
   try {
-    const user = await db('users')
-      .select('scopes')
-      .where({ id: user_id })
-      .first()
     const thisComment = await db('location_comments')
       .select('created_by')
       .where({ id: comment_id })
       .first()
     if (
-      !user.scopes.includes('delete_comments') &&
+      !(await userHasScope(user_id, 'delete_comments')) &&
       thisComment.created_by !== user_id
     ) {
       return catchError(
@@ -504,14 +478,7 @@ const fetchLocationPhotos = async (location_id) => {
   return photos
 }
 
-// Send a response based on the type of error occured
-const catchError = function (message, errorType, res) {
-  errorMessage.error = message
-  return res.status(status[errorType]).send(errorMessage)
-}
-
 module.exports = {
-  // setPhoto,
   fetchLocationsList,
   fetchLocation,
   updateLocation,

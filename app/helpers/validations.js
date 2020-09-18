@@ -66,6 +66,14 @@ const empty = (input) => {
 }
 
 /**
+ *
+ * @param {array, array} input
+ * @returns {Boolean} True or False
+ */
+const doArraysContainTheSame = (arrayOne, arrayTwo) =>
+  arrayOne.sort().join(',') === arrayTwo.sort().join(',')
+
+/**
  * Generate Token
  * @param {string} id
  * @returns {string} token
@@ -101,4 +109,5 @@ module.exports = {
   hashString,
   comparePassword,
   generateUserToken,
+  doArraysContainTheSame,
 }

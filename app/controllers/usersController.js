@@ -7,11 +7,14 @@ const {
   isEmpty,
   generateUserToken,
   comparePassword,
+  doArraysContainTheSame,
 } = require('../helpers/validations')
+const { catchError } = require('./catchError')
 
-const { errorMessage, successMessage, status } = require('../helpers/status')
+const { successMessage, status } = require('../helpers/status')
 const { upload } = require('./usersPhotoUpload')
 const multer = require('multer')
+const { userHasScope } = require('./scopesController')
 
 // const verifyAuth = require('../middlewares/verifyAuth.js')
 
@@ -591,29 +594,6 @@ const makeFriendsWith = async (req, res) => {
   }
 }
 
-// /**
-//  * Fetch a users scopes
-//  * @param {object} req
-//  * @param {object} res
-//  * @returns {object} user object
-//  */
-// const fetchUserScopes = async (req, res) => {
-//   const { id } = req.params
-//   try {
-//     // Find user in DB
-//     const thisUser = await db('users').select('scopes').where('id', id).first()
-//     // Check if no one was found
-//     if (!thisUser) {
-//       return catchError('User could not be found', 'notfound', res)
-//     }
-//     // Create user obj with token && send to client
-//     successMessage.scopes = thisUser.scopes
-//     return res.status(status.success).send(successMessage)
-//   } catch (error) {
-//     return catchError('Operation was not successful', 'error', res)
-//   }
-// }
-
 /**
  * Update scopes of a user
  * @param {object} req
@@ -624,56 +604,31 @@ const updateUserScopes = async (req, res) => {
   const { user_id } = req.user
   const { scopes, id } = req.body
   try {
-    const loggedInUser = await db('users')
-      .select('scopes')
-      .where({ id: user_id })
-      .first()
-    if (!loggedInUser.scopes.includes('edit_users_scopes')) {
-      return catchError('Sorry, you are not allowed to do this', 'bad', res)
-    }
     const usersPreviousScopes = await db('users')
       .select('scopes', 'username')
       .where({ id: id })
       .first()
-    const userCouldUpdateOthersScopes = usersPreviousScopes.scopes.includes(
-      'edit_users_scopes'
-    )
-    const userCouldSuspendAdmins = usersPreviousScopes.scopes.includes(
-      'suspend_admins'
-    )
-    const newScopesDoesnotAllowUserToDoSo = !scopes.includes(
-      'edit_users_scopes'
-    )
-    const withNewScopesUserCanSuspendAdmins = scopes.includes('suspend_admins')
-    const loggedInUserCanSuspendAdmins = loggedInUser.scopes.includes(
-      'suspend_admins'
-    )
-    if (
-      usersPreviousScopes.scopes.sort().join(',') === scopes.sort().join(',')
-    ) {
+    if (!(await userHasScope(user_id, 'edit_users_scopes'))) {
+      return catchError('Sorry, you are not allowed to do this', 'bad', res)
+    }
+    const couldEditScopes = await userHasScope(id, 'edit_users_scopes')
+    const couldSuspendAdmins = await userHasScope(id, 'suspend_admins')
+    const userCanSuspendAdmins = await userHasScope(user_id, 'suspend_admins')
+    const nowCannotEditScopes = !scopes.includes('edit_users_scopes')
+    const nowCanSuspendAdmins = scopes.includes('suspend_admins')
+    if (doArraysContainTheSame(usersPreviousScopes.scopes, scopes)) {
       return catchError('Scopes unchanged', 'bad', res)
     }
-    if (
-      userCouldUpdateOthersScopes &&
-      newScopesDoesnotAllowUserToDoSo &&
-      !loggedInUserCanSuspendAdmins
-    ) {
+    if (couldEditScopes && nowCannotEditScopes && !userCanSuspendAdmins) {
       return catchError('Sorry, you can not suspend admins', 'bad', res)
     }
-    if (
-      !loggedInUserCanSuspendAdmins &&
-      withNewScopesUserCanSuspendAdmins &&
-      !userCouldSuspendAdmins
-    ) {
-      return catchError("You can't let them do that", 'bad', res)
+    if (!userCanSuspendAdmins && nowCanSuspendAdmins && !couldSuspendAdmins) {
+      return catchError("You can't do that", 'bad', res)
     }
-    if (
-      userCouldSuspendAdmins &&
-      !withNewScopesUserCanSuspendAdmins &&
-      !loggedInUserCanSuspendAdmins
-    ) {
+    if (couldSuspendAdmins && !nowCanSuspendAdmins && !userCanSuspendAdmins) {
       return catchError("You can't suspend them from suspending :|", 'bad', res)
     }
+
     const updated_at = moment(new Date())
     await db('users')
       .where({ id: id })
@@ -715,6 +670,11 @@ const fetchThisUser = async (value, whichColoumn) =>
     .where(`u.${whichColoumn}`, value)
     .first()
 
+/**
+ * Fetch user requests (outbound)
+ * @param {integer} id
+ * @returns {object} requests array
+ */
 const fetchThisUserRequests = async (id) => {
   const userRequests = await db
     .select('requestee_id', 'created_at')
@@ -727,6 +687,11 @@ const fetchThisUserRequests = async (id) => {
   return userRequestsArray
 }
 
+/**
+ * Fetch user requests (inbound)
+ * @param {integer} id
+ * @returns {object} requests array
+ */
 const fetchThisUserRequestsInbound = async (id) => {
   const userRequests = await db
     .select('requester_id', 'created_at')
@@ -739,12 +704,6 @@ const fetchThisUserRequestsInbound = async (id) => {
   return userRequestsArray
 }
 
-// Send a response based on the type of error occured
-const catchError = function (message, errorType, res) {
-  errorMessage.error = message
-  return res.status(status[errorType]).send(errorMessage)
-}
-
 module.exports = {
   signupUser,
   siginUser,
@@ -753,7 +712,6 @@ module.exports = {
   updateUser,
   fetchUsersList,
   makeFriendsWith,
-  // fetchUserScopes,
   updateUserScopes,
   fetchInboundRequestsCount,
 }
