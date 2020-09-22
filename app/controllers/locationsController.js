@@ -19,16 +19,19 @@ const setPhoto = async (req, res) => {
   const { location_id, index } = req.params
   const { user_id } = req.user
   try {
-    if (!(await userHasScope(user_id, 'edit_locations'))) {
-      return catchError('You can not edit locations', 'bad', res)
+    const thisLocation = await db('locations')
+      .select('photo', 'created_by')
+      .where('id', location_id)
+      .first()
+    if (
+      !(await userHasScope(user_id, 'edit_locations')) &&
+      user_id !== thisLocation.created_by
+    ) {
+      return catchError('You can not edit this location', 'bad', res)
     }
     // fetch location photo if index was set to 'cover'
     // to see if there was a photo; then replace it
     if (index === 'cover') {
-      const thisLocation = await db('locations')
-        .select('photo')
-        .where('id', location_id)
-        .first()
       if (!isEmpty(thisLocation.photo)) {
         // Pick photo name from the end of the previous photo URL
         const prevPhotoName = /[^/]*$/.exec(thisLocation.photo)[0]
@@ -109,13 +112,16 @@ const deletePhoto = async (req, res) => {
   const { id, location_id } = req.params
   const { user_id } = req.user
   try {
-    if (!(await userHasScope(user_id, 'edit_locations'))) {
-      return catchError('You can not edit locations', 'bad', res)
-    }
     const thisPhoto = await db('location_photos')
-      .select('url')
+      .select('url', 'created_by')
       .where({ id: id })
       .first()
+    if (
+      !(await userHasScope(user_id, 'edit_locations')) &&
+      user_id !== thisPhoto.created_by
+    ) {
+      return catchError('You can not delete this photo', 'bad', res)
+    }
     const prevPhotoName = /[^/]*$/.exec(thisPhoto.url)[0]
     const relativePathToPrevPhoto =
       process.env.UPLOAD_DIR + process.env.UPLOAD_DIR_LOCATION + prevPhotoName
@@ -159,6 +165,7 @@ const fetchLocationsList = async (req, res) => {
         'photo',
         'cost',
         'meta',
+        'verified',
         'sport_types',
         'girls_allowed',
         'created_at'
@@ -278,7 +285,7 @@ const insertLocation = async (req, res) => {
   }
   const insertQuery = db('locations')
   try {
-    if (!(await userHasScope(user_id, 'edit_locations'))) {
+    if (!(await userHasScope(user_id, 'add_locations'))) {
       return catchError('You are not authorized to do this!', 'bad', res)
     }
     // Actually do the update query
@@ -335,13 +342,20 @@ const updateLocation = async (req, res) => {
   ) {
     return catchError('Empty fields', 'bad', res)
   }
-  const updateQuery = db('locations').where({ id: id })
+  const locationBeforUpdate = await db('locations')
+    .select('created_by')
+    .where({ id: id })
+    .first()
   try {
-    if (!(await userHasScope(user_id, 'edit_locations'))) {
+    if (
+      !(await userHasScope(user_id, 'edit_locations')) &&
+      locationBeforUpdate.created_by !== user_id
+    ) {
       return catchError('You are not authorized to do this!', 'bad', res)
     }
-    // Actually do the update query
-    await updateQuery.update(columnsToBeUpdated)
+
+    // Actually do the update
+    await db('locations').where({ id: id }).update(columnsToBeUpdated)
     // Fetch the same location after the update
     const location = await db('locations').select('*').where({ id: id }).first()
     const comments = await fetchLocationComments(id)
