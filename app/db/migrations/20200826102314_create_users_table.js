@@ -13,6 +13,7 @@ module.exports.up = async function (knex) {
     table.specificType('sports', 'text ARRAY').notNullable()
     table.specificType('photos', 'text ARRAY')
     table.specificType('friends', 'integer ARRAY')
+    table.specificType('close_friends', 'integer ARRAY')
     table.specificType('scopes', 'text ARRAY')
     table.boolean('verified').defaultTo(false)
     table.timestamp('created_at')

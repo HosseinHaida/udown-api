@@ -6,8 +6,6 @@ module.exports.up = async function (knex) {
     table.integer('rating').notNullable() // MAX = 10
     table.timestamp('created_at').notNullable()
     table.integer('created_by').references('users.id').notNullable()
-    table.timestamp('updated_at')
-    table.integer('updated_by').references('users.id')
   })
 }
 

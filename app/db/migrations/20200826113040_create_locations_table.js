@@ -10,6 +10,7 @@ module.exports.up = async function (knex) {
     table.text('meta')
     table.specificType('sport_types', 'text ARRAY').notNullable()
     table.boolean('girls_allowed').defaultTo(false)
+    table.boolean('verified').defaultTo(false)
     table.timestamp('created_at')
     table.integer('created_by')
     table.timestamp('updated_at')
