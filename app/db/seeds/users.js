@@ -15,7 +15,8 @@ exports.seed = function (knex) {
           photo: '',
           height: 180,
           username: 'hossein',
-          bio: 'A passionate freestylist.',
+          bio: `A passionate freestylist.
+09366188190 whatsapp me for verification etc.`,
           created_at: '2020-05-19 10:00:40',
           updated_at: null,
           updated_by: null,
@@ -49,7 +50,7 @@ exports.seed = function (knex) {
           sports: ['basketball'],
           photos: [],
           friends: [],
-          scopes: ['add_events'],
+          scopes: ['add_events', 'add_comments'],
           verified: true,
         },
         {
@@ -69,7 +70,7 @@ exports.seed = function (knex) {
           sports: ['basketball'],
           photos: [],
           friends: [],
-          scopes: ['add_events'],
+          scopes: ['add_events', 'add_comments'],
           verified: true,
         },
         {
@@ -89,14 +90,7 @@ exports.seed = function (knex) {
           sports: ['basketball'],
           photos: [],
           friends: [],
-          scopes: [
-            'edit_users_scopes',
-            'edit_locations',
-            'add_locations',
-            'edit_events',
-            'add_events',
-            'suspend_admins',
-          ],
+          scopes: ['add_locations', 'add_events', 'add_comments'],
           verified: true,
         },
         {
@@ -116,7 +110,7 @@ exports.seed = function (knex) {
           sports: ['basketball'],
           photos: [],
           friends: [],
-          scopes: ['add_locations', 'edit_events', 'add_events'],
+          scopes: ['add_locations', 'add_comments', 'add_events'],
           verified: true,
         },
         {
@@ -136,12 +130,7 @@ exports.seed = function (knex) {
           sports: ['basketball'],
           photos: [],
           friends: [],
-          scopes: [
-            'edit_locations',
-            'add_locations',
-            'edit_events',
-            'add_events',
-          ],
+          scopes: ['add_locations', 'add_events', 'add_comments'],
           verified: true,
         },
         {
@@ -161,7 +150,7 @@ exports.seed = function (knex) {
           sports: ['basketball'],
           photos: [],
           friends: [],
-          scopes: ['add_locations', 'edit_events', 'add_events'],
+          scopes: ['add_locations', 'add_comments', 'add_events'],
           verified: true,
         },
       ])

@@ -19,6 +19,7 @@ One rim 3m high, the other 2.80`,
           girls_allowed: true,
           created_at: '2020-05-19 10:00:40+04:30',
           created_by: null,
+          verified: true,
         },
         {
           name: 'Moshtagh',
@@ -36,6 +37,7 @@ Just that super slippery asphalt`,
           girls_allowed: false,
           created_at: '2020-05-19 10:00:40+04:30',
           created_by: null,
+          verified: false,
         },
         {
           name: 'Bagh Ghadir',
@@ -51,6 +53,7 @@ Standard glass backboard rims`,
           girls_allowed: true,
           created_at: '2020-05-19 10:00:40+04:30',
           created_by: null,
+          verified: false,
         },
       ])
     })
