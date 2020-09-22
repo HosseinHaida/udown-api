@@ -203,8 +203,6 @@ const fetchUsersList = async (req, res) => {
   const { type } = req.params
   const offset = (Number(page) - 1) * Number(how_many)
   try {
-    // Create query for total number of users
-    const totalUsersQuery = db('users').count('*').first()
     // Create query to fetch users
     const query = db
       .from('users')
@@ -225,8 +223,6 @@ const fetchUsersList = async (req, res) => {
         'city',
         'created_at'
       )
-      .offset(offset)
-      .limit(how_many)
 
     // If type of users is set to 'friends'
     let friends = []
@@ -239,7 +235,6 @@ const fetchUsersList = async (req, res) => {
         .first()
       friends = user.friends
       query.whereIn('id', friends)
-      totalUsersQuery.whereIn('id', friends)
     }
     // If type of users is set to 'requests'
     let userInboundRequests = []
@@ -247,7 +242,6 @@ const fetchUsersList = async (req, res) => {
       const { user_id } = req.user
       userInboundRequests = await fetchThisUserRequestsInbound(user_id)
       query.whereIn('id', userInboundRequests)
-      totalUsersQuery.whereIn('id', userInboundRequests)
     }
     if (!isEmpty(search_text)) {
       const where = (column) => {
@@ -265,22 +259,13 @@ const fetchUsersList = async (req, res) => {
         .whereRaw(where('username'))
         .orWhereRaw(where('first_name'))
         .orWhereRaw(where('last_name'))
-      // Change query for total number of users based on search_text
-      totalUsersQuery
-        .whereRaw(where('username'))
-        .orWhereRaw(where('first_name'))
-        .orWhereRaw(where('last_name'))
     }
-    // Calculate number of users and pages
-    const total = await totalUsersQuery
-    const totalCount = total.count
-    const totalPages = Math.ceil(total.count / how_many)
     // Actually query the DB for users
-    const users = await query
-    // Check if no one was found
-    if (isEmpty(users)) {
-      return catchError('Could not find any user', 'notfound', res)
-    }
+    const users = await query.offset(offset).limit(how_many)
+    // Calculate number of users and pages
+    const totalCount = users.length
+    const totalPages = Math.ceil(totalPages / how_many)
+    // Send response
     successMessage.users = users
     successMessage.total = totalCount
     successMessage.pages = totalPages

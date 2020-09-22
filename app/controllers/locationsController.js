@@ -152,52 +152,37 @@ const fetchLocationsList = async (req, res) => {
   const { page, how_many, search_text } = req.params
   const offset = (Number(page) - 1) * Number(how_many)
   try {
-    // Create query for total number of locations
-    const totalLocationsQuery = db('locations').count('*').first()
     // Create query to fetch locations
-    const query = db('locations')
-      .select(
-        'id',
-        'name',
-        'maps_url',
-        'city',
-        'region',
-        'photo',
-        'cost',
-        'meta',
-        'verified',
-        'sport_types',
-        'girls_allowed',
-        'created_at'
-      )
-      .offset(offset)
-      .limit(how_many)
+    const query = db('locations').select(
+      'id',
+      'name',
+      'maps_url',
+      'city',
+      'region',
+      'photo',
+      'cost',
+      'meta',
+      'verified',
+      'sport_types',
+      'girls_allowed',
+      'created_at'
+    )
 
     if (!isEmpty(search_text)) {
       const where = (column) =>
         `LOWER(${column}) LIKE '%${search_text.toLowerCase()}%'`
-
       // Change query to fetch locations based on search_text
       query
         .whereRaw(where('name'))
         .orWhereRaw(where('city'))
         .orWhereRaw(where('region'))
-      // Change query for total number of locations based on search_text
-      totalLocationsQuery
-        .whereRaw(where('name'))
-        .orWhereRaw(where('city'))
-        .orWhereRaw(where('region'))
     }
-    // Calculate number of locations and pages
-    const total = await totalLocationsQuery
-    const totalCount = total.count
-    const totalPages = Math.ceil(total.count / how_many)
     // Actually query the DB for locations
-    const locations = await query
-    // Check if nothing was found
-    if (isEmpty(locations)) {
-      return catchError('Could not find any locations', 'notfound', res)
-    }
+    const locations = await query.offset(offset).limit(how_many)
+    // Calculate number of locations and pages
+    const totalCount = locations.length
+    const totalPages = Math.ceil(totalCount / how_many)
+    // Send locations and pages etc.
     successMessage.locations = locations
     successMessage.total = totalCount
     successMessage.pages = totalPages
