@@ -2,6 +2,7 @@ const express = require('express')
 const cors = require('cors')
 const usersRoute = require('./app/routes/usersRoute.js')
 const locationsRoute = require('./app/routes/locationsRoute.js')
+const eventsRoute = require('./app/routes/eventsRoute.js')
 
 const path = require('path')
 
@@ -19,6 +20,7 @@ app.use(express.static(process.env.UPLOAD_DIR))
 
 app.use('/api/v1', usersRoute)
 app.use('/api/v1', locationsRoute)
+app.use('/api/v1', eventsRoute)
 
 app.listen(process.env.PORT).on('listening', () => {
   console.log(`🚀 We are live on ${process.env.PORT}`)
