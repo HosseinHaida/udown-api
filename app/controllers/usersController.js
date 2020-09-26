@@ -61,6 +61,7 @@ const signupUser = async (req, res) => {
     sports,
     scopes: ['add_events', 'add_comments'],
     friends: [],
+    close_friends: [],
     created_at,
   }
   try {
@@ -83,6 +84,8 @@ const signupUser = async (req, res) => {
     )
     // Create user obj with token && send to client
     successMessage.user = thisUser
+    successMessage.user.outbound_requests = []
+    successMessage.user.inbound_requests = []
     successMessage.user.token = token
     return res.status(status.created).send(successMessage)
   } catch (error) {
@@ -131,7 +134,14 @@ const siginUser = async (req, res) => {
       )
       delete thisUser.password_hash
       // Create user obj with token && send to client
+      const userRequests = await fetchThisUserRequests(thisUser.id)
+      const userRequestsInbound = await fetchThisUserRequestsInbound(
+        thisUser.id
+      )
+
       successMessage.user = thisUser
+      successMessage.user.outbound_requests = userRequests
+      successMessage.user.inbound_requests = userRequestsInbound
       successMessage.user.token = token
       return res.status(status.success).send(successMessage)
     } else {
@@ -224,8 +234,19 @@ const fetchUsersList = async (req, res) => {
         'created_at'
       )
 
+    if (!isEmpty(search_text)) {
+      const where = (column) =>
+        `LOWER(${column}) LIKE '%${search_text.toLowerCase()}%'`
+
+      // Change query to fetch users based on search_text
+      query.where(function () {
+        this.whereRaw(where('username'))
+          .orWhereRaw(where('first_name'))
+          .orWhereRaw(where('last_name'))
+      })
+    }
+
     // If type of users is set to 'friends'
-    let friends = []
     if (type === 'friends') {
       const { user_id } = req.user
       const user = await db
@@ -233,38 +254,23 @@ const fetchUsersList = async (req, res) => {
         .from('users')
         .where({ id: user_id })
         .first()
-      friends = user.friends
-      query.whereIn('id', friends)
+      query.whereIn('id', user.friends)
     }
     // If type of users is set to 'requests'
-    let userInboundRequests = []
     if (type === 'requests') {
       const { user_id } = req.user
-      userInboundRequests = await fetchThisUserRequestsInbound(user_id)
-      query.whereIn('id', userInboundRequests)
+      const userInRequests = await fetchThisUserRequestsInbound(user_id)
+      query.whereIn('id', userInRequests)
     }
-    if (!isEmpty(search_text)) {
-      const where = (column) => {
-        let whereClause = `LOWER(${column}) LIKE '%${search_text.toLowerCase()}%'`
-        if (type === 'friends') {
-          whereClause += ` AND id IN (${friends})`
-        }
-        if (type === 'requests') {
-          whereClause += ` AND id IN (${userInboundRequests})`
-        }
-        return whereClause
-      }
-      // Change query to fetch users based on search_text
-      query
-        .whereRaw(where('username'))
-        .orWhereRaw(where('first_name'))
-        .orWhereRaw(where('last_name'))
-    }
+
     // Actually query the DB for users
-    const users = await query.offset(offset).limit(how_many)
+    const users = await query
+      .offset(offset)
+      .limit(how_many)
+      .orderBy('first_name')
     // Calculate number of users and pages
     const totalCount = users.length
-    const totalPages = Math.ceil(totalPages / how_many)
+    const totalPages = Math.ceil(totalCount / how_many)
     // Send response
     successMessage.users = users
     successMessage.total = totalCount
@@ -441,7 +447,7 @@ const updateUser = async (req, res) => {
  * @param {object} res
  * @returns {object} reflection object
  */
-const makeFriendsWith = async (req, res) => {
+const handleFriendRequest = async (req, res) => {
   const { requestee_id } = req.body
   if (isEmpty(requestee_id)) {
     return catchError('Do not know who to send the request to', 'bad', res)
@@ -466,93 +472,74 @@ const makeFriendsWith = async (req, res) => {
       .where('u.id', user_id)
       .first()
     const user = await userFriendsQuery
-    const userQuery = db('users').where({ id: user_id })
     const requestee = await db
       .select('friends')
       .from({ u: 'users' })
       .where('u.id', requestee_id)
       .first()
-    const requesteeQuery = db('users').where({ id: requestee_id })
     const sameRequestButFromTheOtherPerson = await db('friend_requests')
       .count('*')
       .where({ requester_id: requestee_id, requestee_id: user_id })
       .first()
+    const updated_at = moment(new Date())
     // If request exists from the other way around
     if (Number(sameRequestButFromTheOtherPerson.count) === 1) {
-      await db('friend_requests')
-        .where({
-          requester_id: requestee_id,
-          requestee_id: user_id,
+      await db.transaction(async (trx) => {
+        // user and requestee
+        const userFriendsUpdated = user.friends.concat([requestee_id])
+        const requesteeFriendsUpdated = requestee.friends.concat([user_id])
+        await trx('friend_requests')
+          .where({
+            requester_id: requestee_id,
+            requestee_id: user_id,
+          })
+          .del()
+        await trx('users').where({ id: user_id }).update({
+          friends: userFriendsUpdated,
+          updated_at: updated_at,
         })
-        .del()
-      const reqs = await db('friend_requests')
-        .count('*')
-        .where('requestee_id', user_id)
-        .first()
-      const count = reqs.count
-
-      // user and requestee
-      const userFriendsUpdated = user.friends.concat([requestee_id])
-      const requesteeFriendsUpdated = requestee.friends.concat([user_id])
-      const updated_at = moment(new Date())
-      await userQuery.update({
-        friends: userFriendsUpdated,
-        updated_at: updated_at,
+        await trx('users').where({ id: requestee_id }).update({
+          friends: requesteeFriendsUpdated,
+          updated_at: updated_at,
+        })
+        const reqs = await trx('friend_requests')
+          .count('*')
+          .where('requestee_id', user_id)
+          .first()
+        const count = reqs.count
+        successMessage.inbound_requests_count = count
+        successMessage.message = 'You are now friends'
       })
-      await requesteeQuery.update({
-        friends: requesteeFriendsUpdated,
-        updated_at: updated_at,
-      })
-      successMessage.inbound_requests_count = count
-      successMessage.message = 'You are now friends'
     }
     // If there is no similar request
     if (
       Number(sameRequest.count) === 0 &&
       Number(sameRequestButFromTheOtherPerson.count) === 0
     ) {
-      // user and requestee
       // If they are already friends
       if (
         user.friends.includes(requestee_id) &&
         requestee.friends.includes(user_id)
       ) {
-        // Remove one another from the friends array of each user
-        const userFriendsUpdated = user.friends.filter(function (id) {
-          return id !== requestee_id
-        })
-        const requesteeFriendsUpdated = requestee.friends.filter(function (id) {
-          return id !== user_id
-        })
-        const updated_at = moment(new Date())
-        await userQuery.update({
-          friends: userFriendsUpdated,
-          updated_at: updated_at,
-        })
-        await requesteeQuery.update({
-          friends: requesteeFriendsUpdated,
-          updated_at: updated_at,
-        })
-        successMessage.message = 'You removed him/her from your friends'
-      } else if (
-        !user.friends.includes(requestee_id) &&
-        requestee.friends.includes(user_id)
-      ) {
-        const updated_at = moment(new Date())
-        const userFriendsUpdated = user.friends.concat([requestee_id])
-        await userQuery.update({
-          friends: userFriendsUpdated,
-          updated_at: updated_at,
-        })
-      } else if (
-        user.friends.includes(requestee_id) &&
-        !requestee.friends.includes(user_id)
-      ) {
-        const updated_at = moment(new Date())
-        const requesteeFriendsUpdated = requestee.friends.concat([user_id])
-        await requesteeQuery.update({
-          friends: requesteeFriendsUpdated,
-          updated_at: updated_at,
+        await db.transaction(async (trx) => {
+          // Remove one another from the friends array of each user
+          const userFriendsUpdated = user.friends.filter(function (id) {
+            return id !== requestee_id
+          })
+          const requesteeFriendsUpdated = requestee.friends.filter(function (
+            id
+          ) {
+            return id !== user_id
+          })
+          await trx('users').where({ id: user_id }).update({
+            friends: userFriendsUpdated,
+            updated_at: updated_at,
+          })
+          await trx('users').where({ id: requestee_id }).update({
+            friends: requesteeFriendsUpdated,
+            updated_at: updated_at,
+          })
+          successMessage.message = 'You removed him/her from your friends'
         })
       } else {
         const created_at = moment(new Date())
@@ -626,31 +613,146 @@ const updateUserScopes = async (req, res) => {
 }
 
 /**
+ * Verify user
+ * @param {object} req
+ * @param {object} res
+ */
+const verifyUser = async (req, res) => {
+  const { user_id } = req.user
+  const { id } = req.body
+  try {
+    if (!(await userHasScope(user_id, 'verify_users'))) {
+      return catchError('You are not allowed to verify users', 'bad', res)
+    }
+    const user = await db('users')
+      .select('verified', 'username')
+      .where({ id: id })
+      .first()
+    if (user.verified) {
+      return catchError(user.username + 'is already verified', 'bad', res)
+    }
+    const updated_at = moment(new Date())
+    await db('users')
+      .where({ id: id })
+      .update({ verified: true, updated_at: updated_at, updated_by: user_id })
+    return res.status(status.success).send(successMessage)
+  } catch (error) {
+    return catchError('Operation was not successful', 'error', res)
+  }
+}
+
+/**
+ * Remove user verification
+ * @param {object} req
+ * @param {object} res
+ */
+const removeVerification = async (req, res) => {
+  const { user_id } = req.user
+  const { id } = req.params
+  try {
+    if (!(await userHasScope(user_id, 'verify_users'))) {
+      return catchError(
+        "You are not allowed to remove user's verification status",
+        'bad',
+        res
+      )
+    }
+    const user = await db('users')
+      .select('verified', 'username')
+      .where({ id: id })
+      .first()
+    if (!user.verified) {
+      return catchError(user.username + 'is not verified yet', 'bad', res)
+    }
+    const updated_at = moment(new Date())
+    await db('users')
+      .where({ id: id })
+      .update({ verified: false, updated_at: updated_at, updated_by: user_id })
+    return res.status(status.success).send(successMessage)
+  } catch (error) {
+    return catchError('Operation was not successful', 'error', res)
+  }
+}
+
+/**
+ * Add user to close friends
+ * @param {object} req
+ * @param {object} res
+ */
+const addToCloseFriends = async (req, res) => {
+  const { user_id } = req.user
+  const { id } = req.body
+  try {
+    const user = await db('users')
+      .select('close_friends', 'friends')
+      .where({ id: user_id })
+      .first()
+    if (!user.friends.includes(Number(id))) {
+      return catchError('You are not yet friends', 'bad', res)
+    }
+    if (user.close_friends.includes(Number(id))) {
+      return catchError('You are already close friends', 'bad', res)
+    }
+    const userCloseFriendsUpdated = user.close_friends.concat([Number(id)])
+    const updated_at = moment(new Date())
+    await db('users').where({ id: user_id }).update({
+      close_friends: userCloseFriendsUpdated,
+      updated_at: updated_at,
+      updated_by: user_id,
+    })
+    successMessage.close_friends = userCloseFriendsUpdated
+    return res.status(status.success).send(successMessage)
+  } catch (error) {
+    return catchError('Operation was not successful', 'error', res)
+  }
+}
+
+/**
+ * Rmove user from close friends
+ * @param {object} req
+ * @param {object} res
+ */
+const removeFromCloseFriends = async (req, res) => {
+  const { user_id } = req.user
+  const { id } = req.params
+  try {
+    const user = await db('users')
+      .select('close_friends', 'friends')
+      .where({ id: user_id })
+      .first()
+
+    if (!user.friends.includes(Number(id))) {
+      return catchError('You are not yet friends, let alone close', 'bad', res)
+    }
+    if (!user.close_friends.includes(Number(id))) {
+      return catchError('You are not close friends', 'bad', res)
+    }
+    const userCloseFriendsUpdated = user.close_friends.filter(function (
+      userId
+    ) {
+      return userId != id
+    })
+    const updated_at = moment(new Date())
+    await db('users').where({ id: user_id }).update({
+      close_friends: userCloseFriendsUpdated,
+      updated_at: updated_at,
+      updated_by: user_id,
+    })
+    successMessage.close_friends = userCloseFriendsUpdated
+    return res.status(status.success).send(successMessage)
+  } catch (error) {
+    return catchError('Operation was not successful', 'error', res)
+  }
+}
+
+/**
  * Fetch user from DB
  * @param {integer} id
  * @returns {object} user
  */
 const fetchThisUser = async (value, whichColoumn) =>
   await db
-    .select(
-      'id',
-      'username',
-      'password_hash',
-      'scopes',
-      'first_name',
-      'last_name',
-      'gender',
-      'height',
-      'bio',
-      'photo',
-      'sports',
-      'photos',
-      'friends',
-      'verified',
-      'city',
-      'created_at',
-      'updated_at'
-    )
+    .select('*')
     .from({ u: 'users' })
     .where(`u.${whichColoumn}`, value)
     .first()
@@ -696,7 +798,11 @@ module.exports = {
   setPhoto,
   updateUser,
   fetchUsersList,
-  makeFriendsWith,
+  handleFriendRequest,
   updateUserScopes,
   fetchInboundRequestsCount,
+  verifyUser,
+  removeVerification,
+  addToCloseFriends,
+  removeFromCloseFriends,
 }
