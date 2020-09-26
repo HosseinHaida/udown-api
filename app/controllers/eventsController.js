@@ -13,10 +13,20 @@ const { successMessage, status } = require('../helpers/status')
  * @returns {object} locations objects array
  */
 const fetchEventsList = async (req, res) => {
-  const { page, how_many, search_text } = req.params
-  const offset = (Number(page) - 1) * Number(how_many)
+  const { user_id } = req.user
+  const { how_many, page, search_text } = req.query
+  const { type } = req.params
   try {
-    // Create query to fetch locations
+    if (
+      type !== 'friends' &&
+      type !== 'close' &&
+      type !== 'public' &&
+      type !== 'all'
+    ) {
+      return catchError('Not valid search parameters', 'bad', res)
+    }
+    const offset = (Number(page) - 1) * Number(how_many)
+    // Create query to fetch events
     const query = db('events')
       .join('users', 'users.id', '=', 'events.created_by')
       .join('locations', 'locations.id', '=', 'events.location_id')
@@ -37,21 +47,46 @@ const fetchEventsList = async (req, res) => {
         'users.first_name',
         'users.last_name',
         'users.photo',
-        'users.verified'
+        'users.verified',
+        'events.only_close_friends',
+        'events.is_public'
       )
-    // change the query to have results based on search_text
+      .whereRaw(`${user_id} <> ALL (events.hide_from)`)
+
+    // If user searched something
     if (!isEmpty(search_text)) {
       const where = (column) =>
         `LOWER(${column}) LIKE '%${search_text.toLowerCase()}%'`
-      // Change query to fetch events based on search_text
-      query
-        .whereRaw(where('name'))
-        .orWhereRaw(where('locations.city'))
-        .orWhereRaw(where('username'))
-        .orWhereRaw(where('first_name'))
-        .orWhereRaw(where('last_name'))
-        .orWhereRaw(where('sport_type'))
+
+      query.andWhere(function () {
+        this.whereRaw(where('name'))
+          .orWhereRaw(where('locations.city'))
+          .orWhereRaw(where('username'))
+          .orWhereRaw(where('first_name'))
+          .orWhereRaw(where('last_name'))
+          .orWhereRaw(where('sport_type'))
+      })
     }
+
+    if (type === 'all') {
+      query.andWhere(function () {
+        this.whereRaw(
+          `${user_id} = ANY(users.friends) AND only_close_friends = false OR (${user_id} = ANY(users.close_friends) AND only_close_friends = true) OR users.id = ${user_id} OR is_public = true`
+        )
+      })
+    } else if (type === 'public') {
+      query.andWhere('is_public', true)
+    } else if (type === 'friends') {
+      query
+        .andWhereRaw(`${user_id} = ANY(users.friends)`)
+        .andWhereRaw(`only_close_friends = false`)
+        .andWhereRaw(`is_public = false`)
+    } else if (type === 'close') {
+      query
+        .andWhereRaw(`${user_id} = ANY(users.close_friends)`)
+        .andWhereRaw(`only_close_friends = true`)
+    }
+
     // Actually query the DB for events
     const events = await query
       .offset(offset)
@@ -69,6 +104,7 @@ const fetchEventsList = async (req, res) => {
     successMessage.pages = totalPages
     return res.status(status.success).send(successMessage)
   } catch (error) {
+    console.log(error)
     return catchError('Operation was not successful', 'error', res)
   }
 }

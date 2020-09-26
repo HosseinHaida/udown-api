@@ -7,10 +7,6 @@ const verifyAuth = require('../middlewares/verifyAuth.js')
 const router = express.Router()
 
 // Routes
-router.get(
-  '/events/list/:page/:how_many/:search_text?',
-  verifyAuth,
-  fetchEventsList
-)
+router.get('/events/list/:type', verifyAuth, fetchEventsList)
 
 module.exports = router
