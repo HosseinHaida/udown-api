@@ -143,7 +143,7 @@ const deletePhoto = async (req, res) => {
 }
 
 /**
- * Fetch locations list ( + [search] implemented)
+ * Fetch locations list ( + [search])
  * @param {object} req
  * @param {object} res
  * @returns {object} locations objects array
@@ -431,6 +431,74 @@ const deleteComment = async (req, res) => {
   }
 }
 
+/**
+ * Verify location
+ * @param {object} req
+ * @param {object} res
+ */
+const verifyLocation = async (req, res) => {
+  const { user_id } = req.user
+  const { id } = req.body
+  try {
+    if (!(await userHasScope(user_id, 'verify_locations'))) {
+      return catchError('You are not allowed to verify locations', 'bad', res)
+    }
+    const location = await db('locations')
+      .select('verified', 'name')
+      .where({ id: id })
+      .first()
+    if (location.verified) {
+      return catchError(location.name + 'is already verified', 'bad', res)
+    }
+    const updated_at = moment(new Date())
+    await db('locations')
+      .where({ id: id })
+      .update({ verified: true, updated_at: updated_at, updated_by: user_id })
+    return res.status(status.success).send(successMessage)
+  } catch (error) {
+    return catchError('Verification was not successful', 'error', res)
+  }
+}
+
+/**
+ * Remove location verification
+ * @param {object} req
+ * @param {object} res
+ */
+const removeLocationVerification = async (req, res) => {
+  const { user_id } = req.user
+  const { id } = req.params
+  try {
+    if (!(await userHasScope(user_id, 'verify_locations'))) {
+      return catchError(
+        'You are not allowed to remove location verification',
+        'bad',
+        res
+      )
+    }
+    const location = await db('locations')
+      .select('verified', 'name')
+      .where({ id: id })
+      .first()
+    if (!location.verified) {
+      return catchError(location.name + 'is not yet verified', 'bad', res)
+    }
+    const updated_at = moment(new Date())
+    await db('locations')
+      .where({ id: id })
+      .update({ verified: false, updated_at: updated_at, updated_by: user_id })
+    return res.status(status.success).send(successMessage)
+  } catch (error) {
+    return catchError('Verification was not successful', 'error', res)
+  }
+}
+
+/**
+ * Fetch comments
+ * @param {object} req
+ * @param {object} res
+ * @returns {object} comments array
+ */
 const fetchLocationComments = async (location_id) => {
   const commentsOnThisLocation = await db('location_comments')
     .count('*')
@@ -456,6 +524,12 @@ const fetchLocationComments = async (location_id) => {
   return comments
 }
 
+/**
+ * Fetch photos
+ * @param {object} req
+ * @param {object} res
+ * @returns {object} photos array
+ */
 const fetchLocationPhotos = async (location_id) => {
   const photosOfThisLocation = await db('location_photos')
     .count('*')
@@ -486,4 +560,6 @@ module.exports = {
   deleteComment,
   setPhoto,
   deletePhoto,
+  verifyLocation,
+  removeLocationVerification,
 }

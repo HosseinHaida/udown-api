@@ -9,6 +9,8 @@ const {
   deleteComment,
   setPhoto,
   deletePhoto,
+  verifyLocation,
+  removeLocationVerification,
 } = require('../controllers/locationsController.js')
 
 const verifyAuth = require('../middlewares/verifyAuth.js')
@@ -31,6 +33,12 @@ router.delete(
   '/location/photo/delete/:location_id/:id',
   verifyAuth,
   deletePhoto
+)
+router.post('/location/verify', verifyAuth, verifyLocation)
+router.delete(
+  '/location/remove/verification/:id',
+  verifyAuth,
+  removeLocationVerification
 )
 
 module.exports = router
