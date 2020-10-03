@@ -14,6 +14,7 @@ const {
   removeVerification,
   addToCloseFriends,
   removeFromCloseFriends,
+  fetchUsersAsOptions,
 } = require('../controllers/usersController.js')
 
 const verifyAuth = require('../middlewares/verifyAuth.js')
@@ -35,6 +36,7 @@ router.get(
 )
 router.get('/users/list/:type', verifyAuth, fetchUsersList)
 router.get('/users/list', fetchUsersList)
+router.get('/users/list/options/:search_text', fetchUsersAsOptions)
 router.post('/auth/verify', verifyAuth, verifyUser)
 router.delete('/auth/remove/verification/:id', verifyAuth, removeVerification)
 router.post('/auth/friend/add/close', verifyAuth, addToCloseFriends)
