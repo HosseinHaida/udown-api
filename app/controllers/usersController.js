@@ -206,7 +206,7 @@ const fetchInboundRequestsCount = async (req, res) => {
  * Fetch users list ( + [search, friends, requests] implemented)
  * @param {object} req
  * @param {object} res
- * @returns {object} user object
+ * @returns {object} users array
  */
 const fetchUsersList = async (req, res) => {
   const { how_many, page, search_text } = req.query
@@ -214,25 +214,7 @@ const fetchUsersList = async (req, res) => {
   const offset = (Number(page) - 1) * Number(how_many)
   try {
     // Create query to fetch users
-    const query = db
-      .from('users')
-      .select(
-        'id',
-        'username',
-        'scopes',
-        'first_name',
-        'last_name',
-        'gender',
-        'height',
-        'bio',
-        'photo',
-        'sports',
-        'photos',
-        'friends',
-        'verified',
-        'city',
-        'created_at'
-      )
+    const query = db.from('users')
 
     if (!isEmpty(search_text)) {
       const where = (column) =>
@@ -256,6 +238,16 @@ const fetchUsersList = async (req, res) => {
         .first()
       query.whereIn('id', user.friends)
     }
+    // If type of users is set to 'close'
+    if (type === 'close') {
+      const { user_id } = req.user
+      const user = await db
+        .select('close_friends')
+        .from('users')
+        .where({ id: user_id })
+        .first()
+      query.whereIn('id', user.close_friends)
+    }
     // If type of users is set to 'requests'
     if (type === 'requests') {
       const { user_id } = req.user
@@ -263,21 +255,74 @@ const fetchUsersList = async (req, res) => {
       query.whereIn('id', userInRequests)
     }
 
+    // Calculate number of users and pages
+    const usersCountQuery = query.clone().count('*').first()
+    const usersCount = await usersCountQuery
+    const totalCount = Number(usersCount.count)
+    const totalPages = Math.ceil(totalCount / how_many)
     // Actually query the DB for users
     const users = await query
+      .select(
+        'id',
+        'username',
+        'scopes',
+        'first_name',
+        'last_name',
+        'gender',
+        'height',
+        'bio',
+        'photo',
+        'sports',
+        'friends',
+        'verified',
+        'city',
+        'created_at'
+      )
       .offset(offset)
       .limit(how_many)
       .orderBy('first_name')
-    // Calculate number of users and pages
-    const totalCount = users.length
-    const totalPages = Math.ceil(totalCount / how_many)
     // Send response
     successMessage.users = users
     successMessage.total = totalCount
     successMessage.pages = totalPages
     return res.status(status.success).send(successMessage)
   } catch (error) {
-    return catchError('Operation was not successful', 'error', res)
+    return catchError('Could not fetch users list', 'error', res)
+  }
+}
+
+/**
+ * Fetch users list as options ( + [search])
+ * @param {object} req
+ * @param {object} res
+ * @returns {object} users array as options for select input
+ */
+const fetchUsersAsOptions = async (req, res) => {
+  const { search_text } = req.params
+  try {
+    // Create query to fetch users
+    const query = db
+      .from('users')
+      // .select({ label: 'username', value: 'id' })
+      .select('id', 'username', 'first_name', 'last_name')
+    if (!isEmpty(search_text)) {
+      const where = (column) =>
+        `LOWER(${column}) LIKE '%${search_text.toLowerCase()}%'`
+
+      // Change query to fetch users based on search_text
+      query.where(function () {
+        this.whereRaw(where('username'))
+          .orWhereRaw(where('first_name'))
+          .orWhereRaw(where('last_name'))
+      })
+    }
+    // Actually query the DB for users
+    const users = await query.orderBy('first_name')
+    // Send response
+    successMessage.users = users
+    return res.status(status.success).send(successMessage)
+  } catch (error) {
+    return catchError('Could not fetch users', 'error', res)
   }
 }
 
@@ -798,6 +843,7 @@ module.exports = {
   setPhoto,
   updateUser,
   fetchUsersList,
+  fetchUsersAsOptions,
   handleFriendRequest,
   updateUserScopes,
   fetchInboundRequestsCount,
