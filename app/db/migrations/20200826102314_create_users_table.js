@@ -11,7 +11,6 @@ module.exports.up = async function (knex) {
     table.text('bio')
     table.integer('height').notNullable()
     table.specificType('sports', 'text ARRAY').notNullable()
-    table.specificType('photos', 'text ARRAY')
     table.specificType('friends', 'integer ARRAY')
     table.specificType('close_friends', 'integer ARRAY')
     table.specificType('scopes', 'text ARRAY')
