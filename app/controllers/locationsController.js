@@ -153,20 +153,7 @@ const fetchLocationsList = async (req, res) => {
   const offset = (Number(page) - 1) * Number(how_many)
   try {
     // Create query to fetch locations
-    const query = db('locations').select(
-      'id',
-      'name',
-      'maps_url',
-      'city',
-      'region',
-      'photo',
-      'cost',
-      'meta',
-      'verified',
-      'sport_types',
-      'girls_allowed',
-      'created_at'
-    )
+    const query = db('locations')
 
     if (!isEmpty(search_text)) {
       const where = (column) =>
@@ -177,11 +164,31 @@ const fetchLocationsList = async (req, res) => {
         .orWhereRaw(where('city'))
         .orWhereRaw(where('region'))
     }
-    // Actually query the DB for locations
-    const locations = await query.offset(offset).limit(how_many)
+
     // Calculate number of locations and pages
-    const totalCount = locations.length
+    const locationsCountQuery = query.clone().count('*').first()
+    const locationsCount = await locationsCountQuery
+    const totalCount = Number(locationsCount.count)
     const totalPages = Math.ceil(totalCount / how_many)
+
+    // Actually query the DB for locations
+    const locations = await query
+      .select(
+        'id',
+        'name',
+        'maps_url',
+        'city',
+        'region',
+        'photo',
+        'cost',
+        'meta',
+        'verified',
+        'sport_types',
+        'girls_allowed',
+        'created_at'
+      )
+      .offset(offset)
+      .limit(how_many)
     // Send locations and pages etc.
     successMessage.locations = locations
     successMessage.total = totalCount
