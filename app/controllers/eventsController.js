@@ -4,6 +4,7 @@ const { isEmpty } = require('../helpers/validations')
 const { catchError } = require('./catchError')
 const { userHasScope } = require('./scopesController')
 const { successMessage, status } = require('../helpers/status')
+const { Query } = require('pg')
 
 /**
  * Fetch events list ( + [search])
@@ -14,7 +15,7 @@ const { successMessage, status } = require('../helpers/status')
 const fetchEventsList = async (req, res) => {
   const { user_id } = req.user
   const { how_many, page, search_text } = req.query
-  const { type } = req.params
+  const { type, show_canceled } = req.params
   try {
     if (
       type !== 'friends' &&
@@ -80,8 +81,13 @@ const fetchEventsList = async (req, res) => {
       })
     } else {
       const now = new Date(moment())
-      const prevDayFromNow = new Date(now.getTime() - 60000 * 60 * 24)
+      const prevDayFromNow = new Date(now.getTime() - 60000 * 60 * 4)
       query.where('happens_at', '>=', prevDayFromNow)
+    }
+    if (show_canceled === 'false') {
+      query.where(function () {
+        this.where({ 'events.canceled': false })
+      })
     }
 
     // Calculate number of events and pages
