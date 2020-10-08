@@ -140,7 +140,7 @@ const fetchEventsList = async (req, res) => {
  * Fetch event
  * @param {object} req
  * @param {object} res
- * @returns {object} location object
+ * @returns {object} event object
  */
 const fetchEvent = async (req, res) => {
   const { id } = req.params
@@ -202,7 +202,7 @@ const fetchEvent = async (req, res) => {
       delete thisEvent.friends
     }
 
-    // Create location obj with token && send to client
+    // Create event obj with participants && send to client
     successMessage.event = thisEvent
     successMessage.event.participants = participants
     return res.status(status.success).send(successMessage)
@@ -279,7 +279,7 @@ const insertEvent = async (req, res) => {
 }
 
 /**
- * Add participent
+ * Add participant
  * @param {object} req
  * @param {object} res
  * @returns {object} participants array
