@@ -10,7 +10,7 @@ exports.seed = function (knex) {
           maps_url: 'https://goo.gl/maps/B58cm3RhK7tPC5dt6',
           photo: '',
           city: 'Esfahan',
-          region: 'Kuye Emam Jafar Sadegh',
+          region: 'Kuye Emam Jafar',
           cost: 'No entrance fees',
           meta: `No WC,
 Good environment
