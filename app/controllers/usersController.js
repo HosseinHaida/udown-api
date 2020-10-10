@@ -210,6 +210,7 @@ const fetchInboundRequestsCount = async (req, res) => {
  */
 const fetchUsersList = async (req, res) => {
   const { how_many, page, search_text } = req.query
+  console.log(req.query)
   const { type } = req.params
   const offset = (Number(page) - 1) * Number(how_many)
   try {
