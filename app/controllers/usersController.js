@@ -210,7 +210,6 @@ const fetchInboundRequestsCount = async (req, res) => {
  */
 const fetchUsersList = async (req, res) => {
   const { how_many, page, search_text } = req.query
-  console.log(req.query)
   const { type } = req.params
   const offset = (Number(page) - 1) * Number(how_many)
   try {
@@ -335,6 +334,7 @@ const fetchUsersAsOptions = async (req, res) => {
  */
 const setPhoto = async (req, res) => {
   const { username } = req.user
+  console.log(req.user)
   try {
     // Fetch user photo column from users to see
     // if the user already has a photo assigned
