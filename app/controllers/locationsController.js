@@ -69,7 +69,7 @@ const setPhoto = async (req, res) => {
         process.env.SERVER_URL +
         // ':' +
         // process.env.PORT +
-        '/api/' +
+        '/static/' +
         process.env.UPLOAD_DIR_LOCATION +
         photoName
       if (index === 'cover') {
