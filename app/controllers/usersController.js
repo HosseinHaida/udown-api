@@ -334,7 +334,6 @@ const fetchUsersAsOptions = async (req, res) => {
  */
 const setPhoto = async (req, res) => {
   const { username } = req.user
-  console.log(req.user)
   try {
     // Fetch user photo column from users to see
     // if the user already has a photo assigned
@@ -370,8 +369,8 @@ const setPhoto = async (req, res) => {
       // Generate photo URL to be saved with user in DB
       const path =
         process.env.SERVER_URL +
-        ':' +
-        process.env.PORT +
+        // ':' +
+        // process.env.PORT +
         '/' +
         process.env.UPLOAD_DIR_USER +
         photoName
