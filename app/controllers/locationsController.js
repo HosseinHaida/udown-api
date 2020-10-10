@@ -67,9 +67,9 @@ const setPhoto = async (req, res) => {
       // Generate photo URL to be saved in DB
       const path =
         process.env.SERVER_URL +
-        ':' +
-        process.env.PORT +
-        '/' +
+        // ':' +
+        // process.env.PORT +
+        '/api/' +
         process.env.UPLOAD_DIR_LOCATION +
         photoName
       if (index === 'cover') {
