@@ -318,7 +318,6 @@ const fetchUsersAsOptions = async (req, res) => {
     }
     // Actually query the DB for users
     const users = await query.orderBy('first_name')
-    console.log(users)
     // Send response
     if (isEmpty(search_text)) {
       successMessage.users = []
