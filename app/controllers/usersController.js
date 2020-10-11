@@ -320,7 +320,11 @@ const fetchUsersAsOptions = async (req, res) => {
     const users = await query.orderBy('first_name')
     console.log(users)
     // Send response
-    successMessage.users = users
+    if (isEmpty(search_text)) {
+      successMessage.users = []
+    } else {
+      successMessage.users = users
+    }
     return res.status(status.success).send(successMessage)
   } catch (error) {
     return catchError('Could not fetch users', 'error', res)
