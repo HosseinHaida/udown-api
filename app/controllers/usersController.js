@@ -318,6 +318,7 @@ const fetchUsersAsOptions = async (req, res) => {
     }
     // Actually query the DB for users
     const users = await query.orderBy('first_name')
+    console.log(users)
     // Send response
     successMessage.users = users
     return res.status(status.success).send(successMessage)
