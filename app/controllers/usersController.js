@@ -617,6 +617,7 @@ const handleFriendRequest = async (req, res) => {
     const allUserRequests = await fetchThisUserRequests(user_id)
     const allUserRequestsInbound = await fetchThisUserRequestsInbound(user_id)
     successMessage.user_friends = thisUser.friends
+    successMessage.user_close_friends = thisUser.close_friends
     successMessage.outbound_requests = allUserRequests
     successMessage.inbound_requests = allUserRequestsInbound
     return res.status(status.created).send(successMessage)
