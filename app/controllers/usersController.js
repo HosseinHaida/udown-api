@@ -516,13 +516,13 @@ const handleFriendRequest = async (req, res) => {
     }
     // Fetch friends of both users
     const userFriendsQuery = db
-      .select('friends')
+      .select('friends', 'close_friends')
       .from({ u: 'users' })
       .where('u.id', user_id)
       .first()
     const user = await userFriendsQuery
     const requestee = await db
-      .select('friends')
+      .select('friends', 'close_friends')
       .from({ u: 'users' })
       .where('u.id', requestee_id)
       .first()
@@ -575,17 +575,29 @@ const handleFriendRequest = async (req, res) => {
           const userFriendsUpdated = user.friends.filter(function (id) {
             return id !== requestee_id
           })
+          const userCloseFriendsUpdated = user.close_friends.filter(function (
+            id
+          ) {
+            return id !== requestee_id
+          })
           const requesteeFriendsUpdated = requestee.friends.filter(function (
             id
           ) {
             return id !== user_id
           })
+          const requesteeCloseFriendsUpdated = requestee.close_friends.filter(
+            function (id) {
+              return id !== user_id
+            }
+          )
           await trx('users').where({ id: user_id }).update({
             friends: userFriendsUpdated,
+            close_friends: userCloseFriendsUpdated,
             updated_at: updated_at,
           })
           await trx('users').where({ id: requestee_id }).update({
             friends: requesteeFriendsUpdated,
+            close_friends: requesteeCloseFriendsUpdated,
             updated_at: updated_at,
           })
           successMessage.message = 'You removed him/her from your friends'
